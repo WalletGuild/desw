@@ -1,0 +1,13 @@
+cfg.py
+*.log
+
+# temporary and build files
+*.pyc
+*~
+.cache
+.eggs
+*.egg-info
+dist
+build
+
+.openshift
