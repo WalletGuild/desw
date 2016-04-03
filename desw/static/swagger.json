@@ -26,10 +26,7 @@
                     "200": {
                         "description": "The Debit record", 
                         "schema": {
-                            "items": {
-                                "$ref": "#/definitions/Debit"
-                            }, 
-                            "type": "array"
+                            "$ref": "#/definitions/Debit"
                         }
                     }
                 }, 
@@ -126,10 +123,7 @@
                     "200": {
                         "description": "user response", 
                         "schema": {
-                            "items": {
-                                "$ref": "#/definitions/User"
-                            }, 
-                            "type": "array"
+                            "$ref": "#/definitions/User"
                         }
                     }
                 }, 
@@ -177,6 +171,50 @@
                     }
                 ], 
                 "operationId": "createAddress"
+            }, 
+            "get": {
+                "responses": {
+                    "default": {
+                        "description": "unexpected error", 
+                        "schema": {
+                            "$ref": "#/definitions/errorModel"
+                        }
+                    }, 
+                    "200": {
+                        "description": "Your new address", 
+                        "schema": {
+                            "items": {
+                                "$ref": "#/definitions/Address"
+                            }, 
+                            "type": "array"
+                        }
+                    }
+                }, 
+                "description": "", 
+                "parameters": [
+                    {
+                        "required": false, 
+                        "in": "body", 
+                        "description": "The address you'd like to get info about.", 
+                        "name": "address", 
+                        "schema": {
+                            "$ref": "#/definitions/Address"
+                        }
+                    }
+                ], 
+                "summary": "Get one or more existing address(es) owned by your user.", 
+                "security": [
+                    {
+                        "kid": []
+                    }, 
+                    {
+                        "typ": []
+                    }, 
+                    {
+                        "alg": []
+                    }
+                ], 
+                "operationId": "getAddress"
             }
         }, 
         "/balance": {
@@ -523,13 +561,10 @@
         "Debit": {
             "title": "Debit", 
             "required": [
-                "id", 
                 "amount", 
                 "address", 
                 "currency", 
-                "network", 
-                "state", 
-                "ref_id"
+                "network"
             ], 
             "type": "object", 
             "description": "A Debit, which subtracts tokens from a User's Balance.", 

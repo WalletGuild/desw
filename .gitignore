@@ -1,7 +1,7 @@
-cfg.py
-*.log
-
 # temporary and build files
+cfg.py
+cfg.ini
+*.log
 *.pyc
 *~
 .cache
@@ -11,3 +11,5 @@ dist
 build
 
 .openshift
+
+

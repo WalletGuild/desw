@@ -73,7 +73,7 @@ class Credit(Base):
     network = sa.Column(sa.String(64), nullable=False)  # i.e. Bitcoin, Dash, Crypto Capital
     state = sa.Column(sa.Enum("unconfirmed", "complete", "error"), nullable=False)
     reference = sa.Column(sa.String(256), nullable=True)  # i.e. invoice#1
-    ref_id = sa.Column(sa.String(256), nullable=False)  # i.e. 4cef42f9ff334b9b11bffbd9da21da54176103d92c1c6e4442cbe28ca43540fd
+    ref_id = sa.Column(sa.String(256), nullable=False, unique=True)  # i.e. 4cef42f9ff334b9b11bffbd9da21da54176103d92c1c6e4442cbe28ca43540fd:0
 
     # foreign key reference to the owner of this
     user_id = sa.Column(

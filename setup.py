@@ -9,7 +9,7 @@ classifiers = [
 setup(
     name='DeSW',
     version='0.0.1.1',
-    packages=['desw'],
+    packages=['desw', 'desw.plugins'],
     url='https://bitbucket.org/deginner/desw',
     license='MIT',
     classifiers=classifiers,

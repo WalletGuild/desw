@@ -15,37 +15,10 @@ from flask.ext.login import login_required, current_user
 from flask_bitjws import FlaskBitjws, load_jws_from_request, FlaskUser
 from jsonschema import validate, ValidationError
 from sqlalchemy_login_models.model import UserKey, User as SLM_User
-import model
-#import ConfigParser
+import plugin
+from desw import CFG, models, ses, eng
 
-# configuration
-#config = ConfigParser.ConfigParser(os.environ.get('DESW_CONFIG_FILE', 'example_cfg.ini'))
-
-try:
-    cfg_loc = os.environ.get('DESW_CONFIG_FILE', 'example_cfg.py')
-    cfg_raw = None
-    with open(cfg_loc, 'r') as f:
-        cfg = imp.load_module("config_as_module", f, cfg_loc,
-                              ('.py', 'r', imp.PY_SOURCE))
-except Exception as e:
-    print e
-    print "Unable to configurate application. Exiting."
-    sys.exit()
-
-"""
-plugin stuff
-"""
-from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
-
-# Dash RPC
-dashrpc = AuthServiceProxy(cfg.DASH_RPC_URL)
-#print "dash info: %s" % dashrpc.getinfo()
-
-# Bitcoin RPC
-bitcoinrpc = AuthServiceProxy(cfg.BITCOIN_RPC_URL)
-#print "bitcoin info: %s" % bitcoinrpc.getinfo()
-
-
+ps = plugin.loadPlugins()
 
 # get the swagger spec for this server
 iml = os.path.dirname(os.path.realpath(__file__))
@@ -98,25 +71,10 @@ def get_user_by_key(app, key):
 app = Flask(__name__)
 app._static_folder = "%s/static" % os.path.realpath(os.path.dirname(__file__))
 
-FlaskBitjws(app, privkey=cfg.PRIV_KEY, get_last_nonce=get_last_nonce,
-            get_user_by_key=get_user_by_key, basepath=cfg.BASEPATH)
+FlaskBitjws(app, privkey=CFG.get('bitjws', 'PRIV_KEY'), get_last_nonce=get_last_nonce,
+            get_user_by_key=get_user_by_key, basepath=CFG.get('bitjws', 'BASEPATH'))
 
-# Setup logging
-logfile = cfg.LOGFILE if hasattr(cfg, 'LOGFILE') else 'server.log'
-loglevel = cfg.LOGLEVEL if hasattr(cfg, 'LOGLEVEL') else logging.INFO
-logging.basicConfig(filename=logfile, level=loglevel)
-logger = logging.getLogger(__name__)
-
-# Setup CORS
 CORS(app)
-
-# Setup database
-eng = sa.create_engine(cfg.SA_ENGINE_URI)
-ses = orm.sessionmaker(bind=eng)()
-SLM_User.metadata.create_all(eng)
-UserKey.metadata.create_all(eng)
-for m in model.__all__:
-    getattr(model, m).metadata.create_all(eng)
 
 
 @app.route('/balance', methods=['GET'])
@@ -143,7 +101,7 @@ def get_balance():
       - alg: []
     operationId: getBalance
     """
-    balsq = ses.query(model.Balance).filter(model.Balance.user_id == current_user.id)
+    balsq = ses.query(models.Balance).filter(models.Balance.user_id == current_user.id)
     if not balsq:
         return None
     bals = [jsonify2(b, 'Balance') for b in balsq]
@@ -182,23 +140,74 @@ def create_address():
     currency = request.jws_payload['data'].get('currency')
     network = request.jws_payload['data'].get('network')
     state = 'active'
-    if network == "Dash":
-        addy = dashrpc.getnewaddress()
-    elif network == "Bitcoin":
-        addy = bitcoinrpc.getnewaddress()
-    print jsonify2(current_user, 'User')
-    print current_user.id
-    address = model.Address(addy, currency, network, state, current_user.id)
+    if network.lower() in ps:
+        try:
+            addy = ps[network.lower()].getNewAddress()
+        except Exception as e:
+            print type(e)
+            print e
+            current_app.logger.error(e)
+            return 'wallet temporarily unavailable', 500
+    else:
+        return 'Invalid network', 400
+    address = models.Address(addy, currency, network, state, current_user.id)
     ses.add(address)
     try:
         ses.commit()
     except Exception as ie:
         ses.rollback()
         ses.flush()
-        return 'Could not create address', 500
+        return 'Could not save address', 500
     newaddy = jsonify2(address, 'Address')
     current_app.logger.info("created new address %s" % newaddy)
     return current_app.bitjws.create_response(newaddy)
+
+
+@app.route('/address', methods=['GET'])
+@login_required
+def get_address():
+    """
+    Get one or more existing address(es) owned by your user.
+    ---
+    parameters:
+      - name: address
+        in: body
+        description: The address you'd like to get info about.
+        required: false
+        schema:
+          $ref: '#/definitions/Address'
+    responses:
+      '200':
+        description: Your new address
+        schema:
+          items:
+              $ref: '#/definitions/Address'
+          type: array
+      default:
+        description: unexpected error
+        schema:
+          $ref: '#/definitions/errorModel'
+    security:
+      - kid: []
+      - typ: []
+      - alg: []
+    operationId: getAddress
+    """
+    address = request.jws_payload['data'].get('address')
+    currency = request.jws_payload['data'].get('currency')
+    network = request.jws_payload['data'].get('network')
+    addysq = ses.query(models.Address).filter(models.Address.user_id == current_user.id)
+    if address:
+        addysq = addysq.filter(models.Address.address == address)
+    elif currency:
+        addysq = addysq.filter(models.Address.currency == currency)
+    elif network:
+        addysq = addysq.filter(models.Address.currency == network)
+    if not addysq:
+        return None
+    addys = [jsonify2(a, 'Address') for a in addysq]
+    response = current_app.bitjws.create_response(addys)
+    return response
 
 
 @app.route('/debit', methods=['POST'])
@@ -218,9 +227,7 @@ def create_debit():
       '200':
         description: The Debit record
         schema:
-          items:
-            $ref: '#/definitions/Debit'
-          type: array
+          $ref: '#/definitions/Debit'
       default:
         description: unexpected error
         schema:
@@ -236,9 +243,33 @@ def create_debit():
     currency = request.jws_payload['data'].get('currency')
     network = request.jws_payload['data'].get('network')
     reference = request.jws_payload['data'].get('reference')
-    ref_id = request.jws_payload['data'].get('ref_id')
     state = 'unconfirmed'
-    debit = model.Debit(amount, address, currency, network, state, reference, ref_id, current_user.id)
+    if network.lower() not in ps:
+        return 'Invalid network', 400
+
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == current_user.id).filter(models.Balance.currency == currency).order_by(models.Balance.time.desc()).first()
+    if not bal or bal.available < amount:
+        return "not enough funds", 400
+    else:
+        bal.total -= amount
+        bal.available -= amount
+    try:
+        ses.commit()
+    except Exception as ie:
+        current_app.logger.exception(ie)
+        ses.rollback()
+        ses.flush()
+        return "unable to send funds", 500
+
+    try:
+        txid = ps[network.lower()].sendToAddress(address, float(amount) / 1e8)
+    except Exception as e:
+        print type(e)
+        print e
+        current_app.logger.error(e)
+        return 'wallet temporarily unavailable', 500
+
+    debit = models.Debit(amount, address, currency, network, state, reference, txid, current_user.id)
     ses.add(debit)
     try:
         ses.commit()
@@ -263,9 +294,7 @@ def get_user():
       '200':
         description: user response
         schema:
-          items:
-            $ref: '#/definitions/User'
-          type: array
+          $ref: '#/definitions/User'
       default:
         description: unexpected error
         schema:
@@ -327,8 +356,8 @@ def add_user():
     userkey = UserKey(key=address, keytype='public', user_id=user.id,
                       last_nonce=request.jws_payload['iat']*1000)
     ses.add(userkey)
-    ses.add(model.Balance(total=0, available=0, currency='BTC', reference='open account', user_id=user.id))
-    ses.add(model.Balance(total=0, available=0, currency='DASH', reference='open account', user_id=user.id))
+    ses.add(models.Balance(total=0, available=0, currency='BTC', reference='open account', user_id=user.id))
+    ses.add(models.Balance(total=0, available=0, currency='DASH', reference='open account', user_id=user.id))
     try:
         ses.commit()
     except Exception as ie:
