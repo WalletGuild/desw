@@ -1,7 +1,6 @@
 import alchemyjsonschema as ajs
 import bitjws
 import copy
-import imp
 import json
 import logging
 import os
@@ -18,7 +17,7 @@ from sqlalchemy_login_models.model import UserKey, User as SLM_User
 import plugin
 from desw import CFG, models, ses, eng
 
-ps = plugin.loadPlugins()
+ps = plugin.load_plugins()
 
 # get the swagger spec for this server
 iml = os.path.dirname(os.path.realpath(__file__))
@@ -142,7 +141,7 @@ def create_address():
     state = 'active'
     if network.lower() in ps:
         try:
-            addy = ps[network.lower()].getNewAddress()
+            addy = ps[network.lower()].get_new_address()
         except Exception as e:
             print type(e)
             print e
@@ -247,7 +246,9 @@ def create_debit():
     if network.lower() not in ps:
         return 'Invalid network', 400
 
-    dbaddy = ses.query(models.Address).filter(models.Address.address == address).filter(models.Address.currency == currency).first()
+    dbaddy = ses.query(models.Address)\
+        .filter(models.Address.address == address)\
+        .filter(models.Address.currency == currency).first()
     if dbaddy is not None and dbaddy.address == address:
         network = 'internal'
     elif network == 'internal' and dbaddy is None:
@@ -257,7 +258,10 @@ def create_debit():
     debit = models.Debit(amount, address, currency, network, state, reference, txid, current_user.id)
     ses.add(debit)
 
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == current_user.id).filter(models.Balance.currency == currency).order_by(models.Balance.time.desc()).first()
+    bal = ses.query(models.Balance)\
+        .filter(models.Balance.user_id == current_user.id)\
+        .filter(models.Balance.currency == currency)\
+        .order_by(models.Balance.time.desc()).first()
     if not bal or bal.available < amount:
         return "not enough funds", 400
     else:
@@ -274,7 +278,10 @@ def create_debit():
         return "unable to send funds", 500
 
     if network == 'internal':
-        bal2 = ses.query(models.Balance).filter(models.Balance.user_id == dbaddy.user_id).filter(models.Balance.currency == currency).order_by(models.Balance.time.desc()).first()
+        bal2 = ses.query(models.Balance)\
+            .filter(models.Balance.user_id == dbaddy.user_id)\
+            .filter(models.Balance.currency == currency)\
+            .order_by(models.Balance.time.desc()).first()
         bal2.available += amount
         bal2.total += amount
         credit = models.Credit(amount, address, currency, network, 'complete', reference, debit.id, dbaddy.user_id)
@@ -291,7 +298,7 @@ def create_debit():
             return "unable to send funds", 500
     else:
         try:
-            debit.ref_id = ps[network.lower()].sendToAddress(address, float(amount) / 1e8)
+            debit.ref_id = ps[network.lower()].send_to_address(address, float(amount) / 1e8)
         except Exception as e:
             print type(e)
             print e
@@ -386,8 +393,8 @@ def add_user():
     userkey = UserKey(key=address, keytype='public', user_id=user.id,
                       last_nonce=request.jws_payload['iat']*1000)
     ses.add(userkey)
-    ses.add(models.Balance(total=0, available=0, currency='BTC', reference='open account', user_id=user.id))
-    ses.add(models.Balance(total=0, available=0, currency='DASH', reference='open account', user_id=user.id))
+    for plug in ps:
+        ses.add(models.Balance(total=0, available=0, currency=ps[plug].CURRENCY, reference='open account', user_id=user.id))
     try:
         ses.commit()
     except Exception as ie:
@@ -405,3 +412,4 @@ def add_user():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8002, debug=True)
+    

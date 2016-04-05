@@ -8,14 +8,14 @@ classifiers = [
 
 setup(
     name='DeSW',
-    version='0.0.1.1',
-    packages=['desw', 'desw.plugins'],
+    version='0.0.2',
+    packages=['desw'],
     url='https://bitbucket.org/deginner/desw',
     license='MIT',
     classifiers=classifiers,
     author='deginner',
     author_email='support@deginner.com',
-    description='An HTTP server application using Swagger 2.0, bitjws, and SQLAlchemy.',
+    description='A centralized ledger suitable for use like a cryptocurrency hot wallet.',
     setup_requires=['pytest-runner'],
     package_data={'desw': ['static/swagger.json']},
     install_requires=[
