@@ -247,12 +247,24 @@ def create_debit():
     if network.lower() not in ps:
         return 'Invalid network', 400
 
+    dbaddy = ses.query(models.Address).filter(models.Address.address == address).filter(models.Address.currency == currency).first()
+    if dbaddy is not None and dbaddy.address == address:
+        network = 'internal'
+    elif network == 'internal' and dbaddy is None:
+        return "internal address not found", 400
+
+    txid = 'TBD'
+    debit = models.Debit(amount, address, currency, network, state, reference, txid, current_user.id)
+    ses.add(debit)
+
     bal = ses.query(models.Balance).filter(models.Balance.user_id == current_user.id).filter(models.Balance.currency == currency).order_by(models.Balance.time.desc()).first()
     if not bal or bal.available < amount:
         return "not enough funds", 400
     else:
         bal.total -= amount
         bal.available -= amount
+        ses.add(bal)
+        current_app.logger.info("updating balance %s" % jsonify2(bal, 'Balance'))
     try:
         ses.commit()
     except Exception as ie:
@@ -261,25 +273,43 @@ def create_debit():
         ses.flush()
         return "unable to send funds", 500
 
-    try:
-        txid = ps[network.lower()].sendToAddress(address, float(amount) / 1e8)
-    except Exception as e:
-        print type(e)
-        print e
-        current_app.logger.error(e)
-        return 'wallet temporarily unavailable', 500
+    if network == 'internal':
+        bal2 = ses.query(models.Balance).filter(models.Balance.user_id == dbaddy.user_id).filter(models.Balance.currency == currency).order_by(models.Balance.time.desc()).first()
+        bal2.available += amount
+        bal2.total += amount
+        credit = models.Credit(amount, address, currency, network, 'complete', reference, debit.id, dbaddy.user_id)
+        ses.add(bal2)
+        ses.add(credit)
+        current_app.logger.info("updating balance %s" % jsonify2(bal2, 'Balance'))
+        current_app.logger.info("created new credit %s" % jsonify2(credit, 'Credit'))
+        try:
+            ses.commit()
+            debit.ref_id = str(credit.id)
+        except Exception as ie:
+            ses.rollback()
+            ses.flush()
+            return "unable to send funds", 500
+    else:
+        try:
+            debit.ref_id = ps[network.lower()].sendToAddress(address, float(amount) / 1e8)
+        except Exception as e:
+            print type(e)
+            print e
+            current_app.logger.error(e)
+            return 'wallet temporarily unavailable', 500
 
-    debit = models.Debit(amount, address, currency, network, state, reference, txid, current_user.id)
-    ses.add(debit)
+    debit.state = 'complete'
     try:
         ses.commit()
     except Exception as ie:
+        current_app.logger.exception(ie)
         ses.rollback()
         ses.flush()
-        return 'Could not create debit', 500
-    current_app.logger.info("created new debit %s" % debit)
-    newdebit = jsonify2(debit, 'Debit')
-    return current_app.bitjws.create_response(newdebit)
+        return "Sent but unconfirmed... check again soon", 200
+
+    result = jsonify2(debit, 'Debit')
+    current_app.logger.info("created new debit %s" % result)
+    return current_app.bitjws.create_response(result)
 
 
 @app.route('/user', methods=['GET'])
