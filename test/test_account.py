@@ -45,7 +45,6 @@ def test_addresses():
 
 
 def test_get_balance():
-    bals = client.get_model('Balance')()
     balances = client.balance.getBalance().result()
     for bal in balances:
         assert hasattr(bal, 'id')
