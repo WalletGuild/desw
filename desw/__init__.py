@@ -61,6 +61,7 @@ def confirm_send(address, amount, ref_id=None):
         logger.exception(e)
         ses.rollback()
         ses.flush()
+    return debit
 
 
 def process_credit(amount, address, currency, network, state, reference,
@@ -86,4 +87,5 @@ def process_credit(amount, address, currency, network, state, reference,
         logger.exception(e)
         ses.rollback()
         ses.flush()
+    return credit
 

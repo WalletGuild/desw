@@ -201,11 +201,130 @@ def get_address():
     elif currency:
         addysq = addysq.filter(models.Address.currency == currency)
     elif network:
-        addysq = addysq.filter(models.Address.currency == network)
+        addysq = addysq.filter(models.Address.network == network)
     if not addysq:
         return None
     addys = [jsonify2(a, 'Address') for a in addysq]
     response = current_app.bitjws.create_response(addys)
+    return response
+
+
+@app.route('/search/debit', methods=['POST'])
+@login_required
+def search_debit():
+    """
+    Get one to ten debit(s) for a single User.
+    ---
+    parameters:
+      - name: searchcd
+        in: body
+        description: The Debit(s) you'd like to get.
+        required: false
+        schema:
+          $ref: '#/definitions/SearchCD'
+    responses:
+      '200':
+        description: the User's debit(s)
+        schema:
+          items:
+            $ref: '#/definitions/Debit'
+          type: array
+      default:
+        description: unexpected error
+        schema:
+          $ref: '#/definitions/errorModel'
+    security:
+      - kid: []
+      - typ: []
+      - alg: []
+    operationId: searchDebits
+    """
+    sid = request.jws_payload['data'].get('id')
+    address = request.jws_payload['data'].get('address')
+    currency = request.jws_payload['data'].get('currency')
+    network = request.jws_payload['data'].get('network')
+    #reference = request.jws_payload['data'].get('reference')
+    ref_id = request.jws_payload['data'].get('ref_id')
+
+    debsq = ses.query(models.Debit).filter(models.Debit.user_id == current_user.id)
+    if not debsq:
+        return None
+
+    if sid:
+        debsq = debsq.filter(models.Debit.id == sid)
+    if address:
+        debsq = debsq.filter(models.Debit.address == address)
+    if currency:
+        debsq = debsq.filter(models.Debit.currency == currency)
+    if network:
+        debsq = debsq.filter(models.Debit.network == network)
+    #if reference:
+    #    debsq = debsq.filter(models.Debit.reference == reference)
+    if ref_id:
+        debsq = debsq.filter(models.Debit.ref_id == ref_id)
+    debsq = debsq.limit(10)
+
+    debits = [jsonify2(d, 'Debit') for d in debsq]
+    response = current_app.bitjws.create_response(debits)
+    return response
+
+
+@app.route('/search/credit', methods=['POST'])
+@login_required
+def search_credit():
+    """
+    Get one to ten credit(s) for a single User.
+    ---
+    parameters:
+      - name: searchcd
+        in: body
+        description: The Credit(s) you'd like to get.
+        required: false
+        schema:
+          $ref: '#/definitions/SearchCD'
+    responses:
+      '200':
+        description: the User's credit(s)
+        schema:
+          items:
+            $ref: '#/definitions/Credit'
+          type: array
+      default:
+        description: unexpected error
+        schema:
+          $ref: '#/definitions/errorModel'
+    security:
+      - kid: []
+      - typ: []
+      - alg: []
+    operationId: searchCredits
+    """
+    sid = request.jws_payload['data'].get('id')
+    address = request.jws_payload['data'].get('address')
+    currency = request.jws_payload['data'].get('currency')
+    network = request.jws_payload['data'].get('network')
+    #reference = request.jws_payload['data'].get('reference')
+    ref_id = request.jws_payload['data'].get('ref_id')
+
+    credsq = ses.query(models.Credit).filter(models.Credit.user_id == current_user.id)
+    if not credsq:
+        return None
+    if sid:
+        credsq = credsq.filter(models.Credit.id == sid)
+    if address:
+        credsq = credsq.filter(models.Credit.address == address)
+    if currency:
+        credsq = credsq.filter(models.Credit.currency == currency)
+    if network:
+        credsq = credsq.filter(models.Credit.network == network)
+    #if reference:
+    #    credsq = credsq.filter(models.Credit.reference == reference)
+    if ref_id:
+        credsq = credsq.filter(models.Credit.ref_id == ref_id)
+    credsq = credsq.limit(10)
+
+    credits = [jsonify2(c, 'Credit') for c in credsq]
+    response = current_app.bitjws.create_response(credits)
     return response
 
 
