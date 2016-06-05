@@ -357,10 +357,9 @@ def network_info(network):
     """
     lnet = network.lower()
     isenabled = lnet in ps
-    fee = int(ps[lnet].FEE*1e8)
+    fee = int(CFG.get(lnet, 'FEE'))
     roughAvail = str(int(ps[lnet].get_balance()['available']))
-    orderMag = len(roughAvail) - 1
-    available = int(float("1" + "0" * orderMag) * 1e8)
+    available = int(float("1" + "0" * (len(roughAvail) - 1)) * 1e8)
     response = json.dumps({'isenabled': isenabled, 'fee': fee,
                            'available': available})
     return response
@@ -410,20 +409,23 @@ def create_debit():
         network = 'internal'
     elif network == 'internal' and dbaddy is None:
         return "internal address not found", 400
+    fee = int(CFG.get(network.lower(), 'FEE'))
 
     txid = 'TBD'
-    debit = models.Debit(amount, address, currency, network, state, reference, txid, current_user.id)
+    debit = models.Debit(amount, fee, address,
+                         currency, network, state, reference, txid, 
+                         current_user.id)
     ses.add(debit)
 
     bal = ses.query(models.Balance)\
         .filter(models.Balance.user_id == current_user.id)\
         .filter(models.Balance.currency == currency)\
         .order_by(models.Balance.time.desc()).first()
-    if not bal or bal.available < amount:
+    if not bal or bal.available < amount + fee:
         return "not enough funds", 400
     else:
-        bal.total -= amount
-        bal.available -= amount
+        bal.total -= amount + fee
+        bal.available -= amount + fee
         ses.add(bal)
         current_app.logger.info("updating balance %s" % jsonify2(bal, 'Balance'))
     try:
@@ -550,8 +552,9 @@ def add_user():
     userkey = UserKey(key=address, keytype='public', user_id=user.id,
                       last_nonce=request.jws_payload['iat']*1000)
     ses.add(userkey)
-    for plug in ps:
-        ses.add(models.Balance(total=0, available=0, currency=ps[plug].CURRENCY, reference='open account', user_id=user.id))
+    for cur in json.loads(CFG.get('internal', 'CURRENCIES')):
+        print cur
+        ses.add(models.Balance(total=0, available=0, currency=cur, reference='open account', user_id=user.id))
     try:
         ses.commit()
     except Exception as ie:
