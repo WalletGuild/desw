@@ -45,7 +45,7 @@
                         }
                     }
                 ], 
-                "summary": "Get one or more debit(s) for a single User.", 
+                "summary": "Get one to ten debit(s) for a single User.", 
                 "security": [
                     {
                         "kid": []
@@ -329,7 +329,7 @@
                         }
                     }
                 ], 
-                "summary": "Get one or more credit(s) for a single User.", 
+                "summary": "Get one to ten credit(s) for a single User.", 
                 "security": [
                     {
                         "kid": []
@@ -378,29 +378,33 @@
         "SearchCD": {
             "title": "SearchCD", 
             "type": "object", 
+            "description": "Search pattern for a Credit or Debit.", 
             "properties": {
-                "currency": {
+                "network": {
                     "type": "string", 
-                    "maxLength": 4
+                    "maxLength": 64
                 }, 
                 "ref_id": {
                     "type": "string", 
                     "maxLength": 256
                 }, 
-                "id": {
-                    "type": "integer", 
-                    "description": "primary key"
-                }, 
-                "network": {
+                "currency": {
                     "type": "string", 
-                    "maxLength": 64
+                    "maxLength": 4
                 }, 
                 "address": {
                     "type": "string", 
                     "maxLength": 64
+                }, 
+                "id": {
+                    "type": "integer", 
+                    "description": "primary key"
+                }, 
+                "page": {
+                    "type": "integer", 
+                    "description": "The page number to return. (10 per page)"
                 }
-            }, 
-            "description": "Search pattern for a Credit or Debit."
+            }
         }, 
         "Balance": {
             "title": "Balance", 
@@ -410,6 +414,7 @@
                 "currency"
             ], 
             "type": "object", 
+            "description": "A user's balance in a single currency. Only the latest record is valid.", 
             "properties": {
                 "available": {
                     "type": "integer"
@@ -436,8 +441,7 @@
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A user's balance in a single currency. Only the latest record is valid."
+            }
         }, 
         "Address": {
             "title": "Address", 
@@ -446,6 +450,7 @@
                 "network"
             ], 
             "type": "object", 
+            "description": "A payment network Address or account number.", 
             "properties": {
                 "network": {
                     "type": "string", 
@@ -475,8 +480,7 @@
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A payment network Address or account number."
+            }
         }, 
         "Credit": {
             "title": "Credit", 
@@ -490,6 +494,7 @@
                 "ref_id"
             ], 
             "type": "object", 
+            "description": "A Credit, which adds tokens to a User's Balance.", 
             "properties": {
                 "network": {
                     "type": "string", 
@@ -526,19 +531,17 @@
                     "type": "string", 
                     "maxLength": 64
                 }, 
+                "time": {
+                    "type": "string", 
+                    "format": "date-time"
+                }, 
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A Credit, which adds tokens to a User's Balance."
+            }
         }, 
         "User": {
-            "description": "A User", 
-            "required": [
-                "username"
-            ], 
-            "type": "object", 
             "properties": {
                 "username": {
                     "type": "string", 
@@ -557,6 +560,11 @@
                     "format": "date-time"
                 }
             }, 
+            "required": [
+                "username"
+            ], 
+            "type": "object", 
+            "description": "A User", 
             "title": "User"
         }, 
         "Debit": {
@@ -568,6 +576,7 @@
                 "network"
             ], 
             "type": "object", 
+            "description": "A Debit, which subtracts tokens from a User's Balance.", 
             "properties": {
                 "network": {
                     "type": "string", 
@@ -604,12 +613,15 @@
                     "type": "string", 
                     "maxLength": 64
                 }, 
+                "time": {
+                    "type": "string", 
+                    "format": "date-time"
+                }, 
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A Debit, which subtracts tokens from a User's Balance."
+            }
         }, 
         "UserKey": {
             "title": "UserKey", 
@@ -618,7 +630,6 @@
                 "keytype"
             ], 
             "type": "object", 
-            "description": "A User's API key", 
             "properties": {
                 "deactivated_at": {
                     "type": "string", 
@@ -653,7 +664,8 @@
                     "type": "string", 
                     "format": "date-time"
                 }
-            }
+            }, 
+            "description": "A User's API key"
         }, 
         "errorModel": {
             "required": [

@@ -245,6 +245,7 @@ def search_debit():
     network = request.jws_payload['data'].get('network')
     #reference = request.jws_payload['data'].get('reference')
     ref_id = request.jws_payload['data'].get('ref_id')
+    page = request.jws_payload['data'].get('page') or 0
 
     debsq = ses.query(models.Debit).filter(models.Debit.user_id == current_user.id)
     if not debsq:
@@ -262,7 +263,9 @@ def search_debit():
     #    debsq = debsq.filter(models.Debit.reference == reference)
     if ref_id:
         debsq = debsq.filter(models.Debit.ref_id == ref_id)
-    debsq = debsq.limit(10)
+    debsq = debsq.order_by(models.Debit.time.desc()).limit(10)
+    if page and isinstance(page, int):
+        debsq = debsq.offset(page * 10)
 
     debits = [jsonify2(d, 'Debit') for d in debsq]
     response = current_app.bitjws.create_response(debits)
@@ -305,6 +308,7 @@ def search_credit():
     network = request.jws_payload['data'].get('network')
     #reference = request.jws_payload['data'].get('reference')
     ref_id = request.jws_payload['data'].get('ref_id')
+    page = request.jws_payload['data'].get('page') or 0
 
     credsq = ses.query(models.Credit).filter(models.Credit.user_id == current_user.id)
     if not credsq:
@@ -321,7 +325,9 @@ def search_credit():
     #    credsq = credsq.filter(models.Credit.reference == reference)
     if ref_id:
         credsq = credsq.filter(models.Credit.ref_id == ref_id)
-    credsq = credsq.limit(10)
+    credsq = credsq.order_by(models.Credit.time.desc()).limit(10)
+    if page and isinstance(page, int):
+        credsq = credsq.offset(page * 10)
 
     credits = [jsonify2(c, 'Credit') for c in credsq]
     response = current_app.bitjws.create_response(credits)
