@@ -328,6 +328,44 @@ def search_credit():
     return response
 
 
+@app.route('/network/<string:network>', methods=['GET'])
+def network_info(network):
+    """
+    Get information about the transaction network indicated.
+    Returned info is: enabled/disabled, available hot wallet balance,
+    & the transaction fee.
+    ---
+    description: Get information about the transaction network indicated.
+    operationId: getinfo
+    produces:
+      - application/json
+    parameters:
+      - name: network
+        in: path
+        type: string
+        required: true
+        description: The network name i.e. Bitcoin, Dash
+    responses:
+      '200':
+        description: the network information
+        schema:
+          $ref: '#/definitions/NetworkInfo'
+      default:
+        description: an error
+        schema:
+          $ref: '#/definitions/errorModel'
+    """
+    lnet = network.lower()
+    isenabled = lnet in ps
+    fee = int(ps[lnet].FEE*1e8)
+    roughAvail = str(int(ps[lnet].get_balance()['available']))
+    orderMag = len(roughAvail) - 1
+    available = int(float("1" + "0" * orderMag) * 1e8)
+    response = json.dumps({'isenabled': isenabled, 'fee': fee,
+                           'available': available})
+    return response
+
+
 @app.route('/debit', methods=['POST'])
 @login_required
 def create_debit():

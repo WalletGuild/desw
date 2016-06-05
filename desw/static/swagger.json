@@ -14,6 +14,39 @@
         "version": "0.0.1"
     }, 
     "paths": {
+        "/network/{network}": {
+            "get": {
+                "responses": {
+                    "default": {
+                        "description": "an error", 
+                        "schema": {
+                            "$ref": "#/definitions/errorModel"
+                        }
+                    }, 
+                    "200": {
+                        "description": "the network information", 
+                        "schema": {
+                            "$ref": "#/definitions/NetworkInfo"
+                        }
+                    }
+                }, 
+                "description": "Returned info is: enabled/disabled, available hot wallet balance,<br/>& the transaction fee.", 
+                "parameters": [
+                    {
+                        "required": true, 
+                        "type": "string", 
+                        "description": "The network name i.e. Bitcoin, Dash", 
+                        "in": "path", 
+                        "name": "network"
+                    }
+                ], 
+                "produces": [
+                    "application/json"
+                ], 
+                "summary": "Get information about the transaction network indicated.", 
+                "operationId": "getinfo"
+            }
+        }, 
         "/search/debit": {
             "post": {
                 "responses": {
@@ -45,7 +78,7 @@
                         }
                     }
                 ], 
-                "summary": "Get one or more debit(s) for a single User.", 
+                "summary": "Get one to ten debit(s) for a single User.", 
                 "security": [
                     {
                         "kid": []
@@ -329,7 +362,7 @@
                         }
                     }
                 ], 
-                "summary": "Get one or more credit(s) for a single User.", 
+                "summary": "Get one to ten credit(s) for a single User.", 
                 "security": [
                     {
                         "kid": []
@@ -378,6 +411,7 @@
         "SearchCD": {
             "title": "SearchCD", 
             "type": "object", 
+            "description": "Search pattern for a Credit or Debit.", 
             "properties": {
                 "currency": {
                     "type": "string", 
@@ -399,8 +433,7 @@
                     "type": "string", 
                     "maxLength": 64
                 }
-            }, 
-            "description": "Search pattern for a Credit or Debit."
+            }
         }, 
         "Balance": {
             "title": "Balance", 
@@ -410,6 +443,7 @@
                 "currency"
             ], 
             "type": "object", 
+            "description": "A user's balance in a single currency. Only the latest record is valid.", 
             "properties": {
                 "available": {
                     "type": "integer"
@@ -436,8 +470,26 @@
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A user's balance in a single currency. Only the latest record is valid."
+            }
+        }, 
+        "NetworkInfo": {
+            "title": "NetworkInfo", 
+            "type": "object", 
+            "description": "Information about a Transaction Network. i.e. Bitcoin, Dash", 
+            "properties": {
+                "available": {
+                    "type": "integer", 
+                    "description": "The available wallet balance as an int"
+                }, 
+                "isenabled": {
+                    "type": "boolean", 
+                    "description": "True only if the network is enabled."
+                }, 
+                "fee": {
+                    "type": "integer", 
+                    "description": "The transaction fee as an int"
+                }
+            }
         }, 
         "Address": {
             "title": "Address", 
@@ -446,6 +498,7 @@
                 "network"
             ], 
             "type": "object", 
+            "description": "A payment network Address or account number.", 
             "properties": {
                 "network": {
                     "type": "string", 
@@ -475,8 +528,7 @@
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A payment network Address or account number."
+            }
         }, 
         "Credit": {
             "title": "Credit", 
@@ -490,6 +542,7 @@
                 "ref_id"
             ], 
             "type": "object", 
+            "description": "A Credit, which adds tokens to a User's Balance.", 
             "properties": {
                 "network": {
                     "type": "string", 
@@ -530,15 +583,9 @@
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A Credit, which adds tokens to a User's Balance."
+            }
         }, 
         "User": {
-            "description": "A User", 
-            "required": [
-                "username"
-            ], 
-            "type": "object", 
             "properties": {
                 "username": {
                     "type": "string", 
@@ -557,6 +604,11 @@
                     "format": "date-time"
                 }
             }, 
+            "required": [
+                "username"
+            ], 
+            "type": "object", 
+            "description": "A User", 
             "title": "User"
         }, 
         "Debit": {
@@ -568,6 +620,7 @@
                 "network"
             ], 
             "type": "object", 
+            "description": "A Debit, which subtracts tokens from a User's Balance.", 
             "properties": {
                 "network": {
                     "type": "string", 
@@ -608,8 +661,7 @@
                     "type": "integer", 
                     "description": "primary key"
                 }
-            }, 
-            "description": "A Debit, which subtracts tokens from a User's Balance."
+            }
         }, 
         "UserKey": {
             "title": "UserKey", 
@@ -618,7 +670,6 @@
                 "keytype"
             ], 
             "type": "object", 
-            "description": "A User's API key", 
             "properties": {
                 "deactivated_at": {
                     "type": "string", 
@@ -653,7 +704,8 @@
                     "type": "string", 
                     "format": "date-time"
                 }
-            }
+            }, 
+            "description": "A User's API key"
         }, 
         "errorModel": {
             "required": [

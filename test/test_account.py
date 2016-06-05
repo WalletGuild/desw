@@ -5,7 +5,7 @@ import pytest
 import time
 from bravado_bitjws.client import BitJWSSwaggerClient
 from desw import CFG, ses, eng, models
-from desw.plugin import mock_credit, mock_address
+from desw.plugin import mock_credit, mock_address, mock_confirm_credit
 
 from bravado.swagger_model import load_file
 
@@ -269,4 +269,11 @@ def test_get_debits():
     debs = client.search.searchDebits(searchcd={'id': by_id}).result()
     assert len(debs) == 1
     assert debs[0].id == by_id
+
+
+def test_get_network():
+    network = client.network.getinfo(network='Mock').result()
+    assert network.isenabled
+    assert network.available == 1 * 1e8
+    assert network.fee == 0.0001 * 1e8
 
