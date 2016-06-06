@@ -6,11 +6,42 @@ A shared wallet server, for maintaining a centralized ledger of accounts. Accoun
 
 This server provides a REST API for operation as a service. The authentication is done using [bitjws](http://github.com/deginner/bitjws).
 
-# Plugins
+# Installation
+
+### Pre-requisites
+
+By default it's expected that [secp256k1](https://github.com/bitcoin/secp256k1) is available, so install it before proceeding; make sure to run `./configure --enable-module-recovery`. If you're using some other library that provides the functionality necessary for this, check the __Using a custom library__ section below.
+
+bitjws can be installed by running `pip install bitjws`.
+
+##### Building secp256k1
+
+In case you need to install the `secp256k1` C library, the following sequence of commands is recommended. If you already have `secp256k1`, make sure it was compiled from the expected git commit or it might fail to work due to API incompatibilities.
+
+```
+git clone git://github.com/bitcoin/secp256k1.git libsecp256k1
+cd libsecp256k1
+git checkout d7eb1ae96dfe9d497a26b3e7ff8b6f58e61e400a
+./autogen.sh
+./configure --enable-module-recovery --enable-module-ecdh --enable-module-schnorr
+make
+make install
+```
+
+Additionally, you may need to set some environmental variables, pointing to the installation above.
+
+```
+INCLUDE_DIR=$(readlink -f ./libsecp256k1/include)
+LIB_DIR=$(readlink -f ./libsecp256k1/.libs)
+python setup.py -q install
+
+LD_LIBRARY_PATH=$(readlink -f ./libsecp256k1/.libs)
+
+### Plugins
 
 This package is practically useless without installing one or more wallet plugins. The only wallet backend that it comes with is a mockup. Currently supported plugins are: [desw-bitcoin](http://github.com/deginner/desw-bitcoin) and [desw-dash](http://github.com/deginner/desw-dash).
 
-### Bitcoin Examples
+# Bitcoin Examples
 
 For the sake of an example, we'll assume you're starting with the desw-bitcoin plugin, and that you're using Deginner's [bravado-bitjws](http://github.com/deginner/bravado-bitjws) Python client.
 

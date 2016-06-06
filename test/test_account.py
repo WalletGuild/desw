@@ -59,6 +59,7 @@ def test_money_cycle():
     # Receive Mock to user
     addy = client.get_model('Address')(currency='MCK', network='Mock')
     address = client.address.createAddress(address=addy).result()
+    print address
     mock_credit(address.address, int(0.01 * 1e8))
 
     for i in range(0, 60):
@@ -183,4 +184,128 @@ def test_money_cycle():
     bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'MCK')
     assert bal.first().total == 0
     assert bal.first().available == 0
+
+
+def test_get_credits():
+    # generate lots of credits
+    by_id = None
+    by_address = None
+    by_ref_id = None
+    for i in range(30):
+        addy = client.get_model('Address')(currency='MCK', network='Mock')
+        address = client.address.createAddress(address=addy).result()
+        c = mock_credit(address.address, int(0.01 * 1e8))
+        if i == 1:
+            by_id = c.id
+        elif i == 2:
+            by_address = address.address
+        elif i == 3:
+            by_ref_id = c.ref_id
+
+    # find all
+    creds = client.search.searchCredits().result()
+    assert len(creds) == 10
+
+    # find second page
+    creds2 = client.search.searchCredits(searchcd={'page': 1}).result()
+    assert len(creds2) == 10
+    # assure that there is no overlap
+    for c2 in creds2:
+        for c in creds:
+            assert c.id != c2.id
+
+    # find third page
+    creds3 = client.search.searchCredits(searchcd={'page': 2}).result()
+    assert len(creds3) == 10
+    # assure that there is no overlap
+    for c3 in creds3:
+        for c in creds:
+            assert c.id != c3.id
+        for c2 in creds2:
+            assert c2.id != c3.id
+
+    # find by address
+    creds = client.search.searchCredits(searchcd={'address': by_address}).result()
+    assert len(creds) == 1
+    assert creds[0].address == by_address
+
+    # find by ref_id
+    creds = client.search.searchCredits(searchcd={'ref_id': by_ref_id}).result()
+    assert len(creds) == 1
+    assert creds[0].ref_id == by_ref_id
+
+    # find by id
+    creds = client.search.searchCredits(searchcd={'id': by_id}).result()
+    assert len(creds) == 1
+    assert creds[0].id == by_id
+
+
+def test_get_debits():
+    # generate a big credit
+    addy = client.get_model('Address')(currency='MCK', network='Mock')
+    address = client.address.createAddress(address=addy).result()
+    c = mock_credit(address.address, int(1 * 1e8))
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'MCK').first()
+    bal.available += c.amount
+    ses.add(bal)
+    try:
+        ses.commit()
+    except Exception as e:
+        ses.rollback()
+        print "skipping test"
+        return
+
+    # send lots of debits
+    by_id = None
+    by_address = None
+    for i in range(30):
+        addy = client2.get_model('Address')(currency='MCK', network='Mock')
+        address = client2.address.createAddress(address=addy).result()
+        debit = client.debit.sendMoney(debit={'amount': int(0.01 * 1e8),
+                                       'address': address.address,
+                                       'currency': 'MCK',
+                                       'network': 'Mock',
+                                       'state': 'unconfirmed',
+                                       'reference': 'test get debits',
+                                       'ref_id': ''}).result()
+        if i == 1:
+            by_id = debit.id
+        elif i == 2:
+            by_address = address.address
+
+    time.sleep(0.2) # db write time... should really check to avoid race
+
+    # find all
+    debs = client.search.searchDebits().result()
+    assert len(debs) >= 10
+
+
+    # find second page
+    debs2 = client.search.searchDebits(searchcd={'page': 1}).result()
+    assert len(debs2) == 10
+    # assure that there is no overlap
+    for d2 in debs2:
+        for d in debs:
+            assert d.id != d2.id
+
+    # find third page
+    debs3 = client.search.searchDebits(searchcd={'page': 2}).result()
+    assert len(debs3) == 10
+    # assure that there is no overlap
+    for d3 in debs3:
+        for d in debs:
+            assert d.id != d3.id
+        for d2 in debs2:
+            assert d2.id != d3.id
+
+    # find by address
+    debs = client.search.searchDebits(searchcd={'address': by_address}).result()
+    assert len(debs) == 1
+    assert debs[0].address == by_address
+
+    # find by id
+    debs = client.search.searchDebits(searchcd={'id': by_id}).result()
+    assert len(debs) == 1
+    assert debs[0].id == by_id
+
 

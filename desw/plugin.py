@@ -62,4 +62,3 @@ class MockPlugin():
     def send_to_address(self, address, amount):
         return _gen_txid()
 
-

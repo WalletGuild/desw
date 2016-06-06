@@ -14,6 +14,52 @@
         "version": "0.0.1"
     }, 
     "paths": {
+        "/search/debit": {
+            "post": {
+                "responses": {
+                    "default": {
+                        "description": "unexpected error", 
+                        "schema": {
+                            "$ref": "#/definitions/errorModel"
+                        }
+                    }, 
+                    "200": {
+                        "description": "the User's debit(s)", 
+                        "schema": {
+                            "items": {
+                                "$ref": "#/definitions/Debit"
+                            }, 
+                            "type": "array"
+                        }
+                    }
+                }, 
+                "description": "", 
+                "parameters": [
+                    {
+                        "required": false, 
+                        "in": "body", 
+                        "description": "The Debit(s) you'd like to get.", 
+                        "name": "searchcd", 
+                        "schema": {
+                            "$ref": "#/definitions/SearchCD"
+                        }
+                    }
+                ], 
+                "summary": "Get one to ten debit(s) for a single User.", 
+                "security": [
+                    {
+                        "kid": []
+                    }, 
+                    {
+                        "typ": []
+                    }, 
+                    {
+                        "alg": []
+                    }
+                ], 
+                "operationId": "searchDebits"
+            }
+        }, 
         "/debit": {
             "post": {
                 "responses": {
@@ -55,6 +101,41 @@
                     }
                 ], 
                 "operationId": "sendMoney"
+            }
+        }, 
+        "/balance": {
+            "get": {
+                "operationId": "getBalance", 
+                "description": "Currently no search parameters are supported. All balances returned.", 
+                "security": [
+                    {
+                        "kid": []
+                    }, 
+                    {
+                        "typ": []
+                    }, 
+                    {
+                        "alg": []
+                    }
+                ], 
+                "responses": {
+                    "default": {
+                        "description": "unexpected error", 
+                        "schema": {
+                            "$ref": "#/definitions/errorModel"
+                        }
+                    }, 
+                    "200": {
+                        "description": "the User's balance(s)", 
+                        "schema": {
+                            "items": {
+                                "$ref": "#/definitions/Balance"
+                            }, 
+                            "type": "array"
+                        }
+                    }
+                }, 
+                "summary": "Get the latest balance(s) for a single User."
             }
         }, 
         "/user": {
@@ -217,10 +298,38 @@
                 "operationId": "getAddress"
             }
         }, 
-        "/balance": {
-            "get": {
-                "operationId": "getBalance", 
-                "description": "Currently no search parameters are supported. All balances returned.", 
+        "/search/credit": {
+            "post": {
+                "responses": {
+                    "default": {
+                        "description": "unexpected error", 
+                        "schema": {
+                            "$ref": "#/definitions/errorModel"
+                        }
+                    }, 
+                    "200": {
+                        "description": "the User's credit(s)", 
+                        "schema": {
+                            "items": {
+                                "$ref": "#/definitions/Credit"
+                            }, 
+                            "type": "array"
+                        }
+                    }
+                }, 
+                "description": "", 
+                "parameters": [
+                    {
+                        "required": false, 
+                        "in": "body", 
+                        "description": "The Credit(s) you'd like to get.", 
+                        "name": "searchcd", 
+                        "schema": {
+                            "$ref": "#/definitions/SearchCD"
+                        }
+                    }
+                ], 
+                "summary": "Get one to ten credit(s) for a single User.", 
                 "security": [
                     {
                         "kid": []
@@ -232,24 +341,7 @@
                         "alg": []
                     }
                 ], 
-                "responses": {
-                    "default": {
-                        "description": "unexpected error", 
-                        "schema": {
-                            "$ref": "#/definitions/errorModel"
-                        }
-                    }, 
-                    "200": {
-                        "description": "the User's balance(s)", 
-                        "schema": {
-                            "items": {
-                                "$ref": "#/definitions/Balance"
-                            }, 
-                            "type": "array"
-                        }
-                    }
-                }, 
-                "summary": "Get the latest balance(s) for a single User."
+                "operationId": "searchCredits"
             }
         }
     }, 
@@ -283,26 +375,36 @@
     }, 
     "host": "0.0.0.0:8002", 
     "definitions": {
-        "IntUserSetting": {
+        "SearchCD": {
+            "title": "SearchCD", 
+            "type": "object", 
+            "description": "Search pattern for a Credit or Debit.", 
             "properties": {
-                "createtime": {
+                "network": {
                     "type": "string", 
-                    "format": "date-time"
+                    "maxLength": 64
                 }, 
-                "value": {
-                    "type": "integer"
+                "ref_id": {
+                    "type": "string", 
+                    "maxLength": 256
+                }, 
+                "currency": {
+                    "type": "string", 
+                    "maxLength": 4
+                }, 
+                "address": {
+                    "type": "string", 
+                    "maxLength": 64
                 }, 
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
+                }, 
+                "page": {
+                    "type": "integer", 
+                    "description": "The page number to return. (10 per page)"
                 }
-            }, 
-            "required": [
-                "value"
-            ], 
-            "type": "object", 
-            "description": "An Int Setting applied to a User", 
-            "title": "IntUserSetting"
+            }
         }, 
         "Balance": {
             "title": "Balance", 
@@ -340,50 +442,6 @@
                     "description": "primary key"
                 }
             }
-        }, 
-        "StrUserSetting": {
-            "properties": {
-                "createtime": {
-                    "type": "string", 
-                    "format": "date-time"
-                }, 
-                "value": {
-                    "type": "string", 
-                    "maxLength": 320
-                }, 
-                "id": {
-                    "type": "integer", 
-                    "description": "primary key"
-                }
-            }, 
-            "required": [
-                "value"
-            ], 
-            "type": "object", 
-            "description": "A Setting applied to a User", 
-            "title": "StrUserSetting"
-        }, 
-        "DateTimeUserSetting": {
-            "properties": {
-                "createtime": {
-                    "type": "string", 
-                    "format": "date-time"
-                }, 
-                "value": {
-                    "type": "string", 
-                    "format": "date-time"
-                }, 
-                "id": {
-                    "type": "integer", 
-                    "description": "primary key"
-                }
-            }, 
-            "required": [
-                "value"
-            ], 
-            "type": "object", 
-            "description": "A Setting applied to a User", 
-            "title": "DateTimeUserSetting"
         }, 
         "Address": {
             "title": "Address", 
@@ -423,32 +481,6 @@
                     "description": "primary key"
                 }
             }
-        }, 
-        "KeyPermission": {
-            "properties": {
-                "permission": {
-                    "type": "string"
-                }, 
-                "description": {
-                    "type": "string", 
-                    "maxLength": 320
-                }, 
-                "name": {
-                    "type": "string", 
-                    "maxLength": 80
-                }, 
-                "id": {
-                    "type": "integer", 
-                    "description": "primary key"
-                }
-            }, 
-            "required": [
-                "permission", 
-                "name"
-            ], 
-            "type": "object", 
-            "description": "A Key Permission", 
-            "title": "KeyPermission"
         }, 
         "Credit": {
             "title": "Credit", 
@@ -499,38 +531,15 @@
                     "type": "string", 
                     "maxLength": 64
                 }, 
+                "time": {
+                    "type": "string", 
+                    "format": "date-time"
+                }, 
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
                 }
             }
-        }, 
-        "Setting": {
-            "properties": {
-                "value_type": {
-                    "enum": [
-                        "str", 
-                        "int", 
-                        "date-time"
-                    ], 
-                    "type": "string", 
-                    "maxLength": 9
-                }, 
-                "name": {
-                    "type": "string", 
-                    "maxLength": 80
-                }, 
-                "description": {
-                    "type": "string", 
-                    "maxLength": 320
-                }
-            }, 
-            "required": [
-                "name"
-            ], 
-            "type": "object", 
-            "description": "A Setting", 
-            "title": "Setting"
         }, 
         "User": {
             "properties": {
@@ -603,6 +612,10 @@
                 "address": {
                     "type": "string", 
                     "maxLength": 64
+                }, 
+                "time": {
+                    "type": "string", 
+                    "format": "date-time"
                 }, 
                 "id": {
                     "type": "integer", 
