@@ -5,7 +5,7 @@ from sqlalchemy_login_models.model import Base, UserKey, User as SLM_User
 import datetime
 
 
-__all__ = ['Balance', 'Address', 'Credit', 'Debit']
+__all__ = ['Balance', 'Address', 'Credit', 'Debit', 'HWBalance']
 
 
 class Balance(Base):
@@ -101,6 +101,7 @@ class Debit(Base):
 
     id = sa.Column(sa.Integer, primary_key=True, doc="primary key")
     amount = sa.Column(sa.BigInteger, nullable=False)
+    fee = sa.Column(sa.BigInteger, nullable=False)
     address = sa.Column(sa.String(64), nullable=False)  # i.e. 1PkzTWAyfR9yoFw2jptKQ3g6E5nKXPsy8r,  XhwWxABXPVG5Z3ePyLVA3VixPRkARK6FKy
     currency = sa.Column(sa.String(4), nullable=False)  # i.e. BTC, DASH, USDT
     network = sa.Column(sa.String(64), nullable=False)  # i.e. Bitcoin, Dash, Crypto Capital
@@ -116,8 +117,9 @@ class Debit(Base):
         nullable=False)
     user = orm.relationship("User", foreign_keys=[user_id])
 
-    def __init__(self, amount, address, currency, network, state, reference, ref_id, user_id):
+    def __init__(self, amount, fee, address, currency, network, state, reference, ref_id, user_id):
         self.amount = amount
+        self.fee = fee
         self.address = address
         self.currency = currency
         self.network = network
@@ -125,4 +127,23 @@ class Debit(Base):
         self.reference = reference
         self.ref_id = ref_id
         self.user_id = user_id
+
+
+class HWBalance(Base):
+    """A Hot Wallet Balance, for internal use only"""
+    __tablename__ = "hwbalance"
+    __name__ = "hwbalance"
+
+    id = sa.Column(sa.Integer, primary_key=True, doc="primary key")
+    available = sa.Column(sa.BigInteger, nullable=False)
+    total = sa.Column(sa.BigInteger, nullable=False)
+    currency = sa.Column(sa.String(4), nullable=False)  # i.e. BTC, DASH, USDT
+    network = sa.Column(sa.String(64), nullable=False)  # i.e. Bitcoin, Dash, Crypto Capital
+    time = sa.Column(sa.DateTime(), default=datetime.datetime.utcnow)
+
+    def __init__(self, available, total, currency, network):
+        self.available = available
+        self.total = total
+        self.currency = currency
+        self.network = network
 

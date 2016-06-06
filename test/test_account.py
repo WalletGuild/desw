@@ -5,7 +5,7 @@ import pytest
 import time
 from bravado_bitjws.client import BitJWSSwaggerClient
 from desw import CFG, ses, eng, models
-from desw.plugin import mock_credit, mock_address
+from desw.plugin import internal_credit, internal_address, internal_confirm_credit
 
 from bravado.swagger_model import load_file
 
@@ -32,7 +32,7 @@ user2 = client2.user.addUser(user=luser2).result().user
 
 
 def test_addresses():
-    addy = client.get_model('Address')(currency='MCK', network='Mock')
+    addy = client.get_model('Address')(currency='BTC', network='Internal')
     address = client.address.createAddress(address=addy).result()
     assert hasattr(address, 'id')
     assert address.user.id == user.id
@@ -56,11 +56,11 @@ def test_get_balance():
 
 
 def test_money_cycle():
-    # Receive Mock to user
-    addy = client.get_model('Address')(currency='MCK', network='Mock')
+    fee = int(CFG.get('internal', 'FEE'))
+    # Receive Internal to user
+    addy = client.get_model('Address')(currency='BTC', network='Internal')
     address = client.address.createAddress(address=addy).result()
-    print address
-    mock_credit(address.address, int(0.01 * 1e8))
+    internal_credit(address.address, int(0.01 * 1e8) + fee)
 
     for i in range(0, 60):
         c = ses.query(models.Credit).filter(models.Credit.address == address.address).first()
@@ -70,12 +70,12 @@ def test_money_cycle():
             time.sleep(1)
     assert c is not None
     assert c.address == address.address
-    assert c.amount == int(0.01 * 1e8)
-    assert c.currency == 'MCK'
-    assert c.network == 'Mock'
+    assert c.amount == int(0.01 * 1e8) + fee
+    assert c.currency == 'BTC'
+    assert c.network == 'Internal'
     assert len(c.ref_id) > 0
 
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'MCK').first()
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'BTC').first()
     assert bal.total > 0
     assert bal.available == 0
     bal.available += c.amount
@@ -87,20 +87,21 @@ def test_money_cycle():
         print "skipping test"
         return
 
-    # send Mock internally to user 2
-    addy = client2.get_model('Address')(currency='MCK', network='Mock')
+    # send Internal internally to user 2
+    addy = client2.get_model('Address')(currency='BTC', network='Internal')
     address = client2.address.createAddress(address=addy).result()
 
     debit = client.debit.sendMoney(debit={'amount': int(0.01 * 1e8),
+                                  'fee': fee,
                                   'address': address.address,
-                                  'currency': 'MCK',
-                                  'network': 'Mock',
+                                  'currency': 'BTC',
+                                  'network': 'Internal',
                                   'state': 'unconfirmed',
-                                  'reference': 'test send money mock internal',
+                                  'reference': 'test send money internal internal',
                                   'ref_id': ''}).result()
     assert debit.state == 'complete'
     assert debit.amount == int(0.01 * 1e8)
-    assert debit.reference == 'test send money mock internal'
+    assert debit.reference == 'test send money internal internal'
     assert debit.network == 'internal'
 
     for i in range(0, 60):
@@ -112,32 +113,33 @@ def test_money_cycle():
     assert c is not None
     assert c.state == 'complete'
     assert c.amount == int(0.01 * 1e8)
-    assert c.reference == 'test send money mock internal'
+    assert c.reference == 'test send money internal internal'
     assert c.network == 'internal'
     assert int(debit.ref_id) == c.id
     assert int(c.ref_id) == debit.id
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'MCK').first()
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'BTC').first()
     assert bal.total == 0
     assert bal.available == 0
 
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'MCK').first()
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'BTC').first()
     assert bal.total == int(0.01 * 1e8)
     assert bal.available == int(0.01 * 1e8)
 
-    # send MCK internally to user 2
-    addy = client2.get_model('Address')(currency='MCK', network='Mock')
+    # send BTC internally to user 2
+    addy = client2.get_model('Address')(currency='BTC', network='Internal')
     address = client2.address.createAddress(address=addy).result()
 
-    debit = client2.debit.sendMoney(debit={'amount': int(0.01 * 1e8),
+    debit = client2.debit.sendMoney(debit={'amount': int(0.0099 * 1e8),
+                                  'fee': CFG.get('internal', 'FEE'),
                                   'address': address.address,
-                                  'currency': 'MCK',
-                                  'network': 'Mock',
+                                  'currency': 'BTC',
+                                  'network': 'Internal',
                                   'state': 'unconfirmed',
-                                  'reference': 'test send money mock internal',
+                                  'reference': 'test send money internal internal',
                                   'ref_id': ''}).result()
     assert debit.state == 'complete'
-    assert debit.amount == int(0.01 * 1e8)
-    assert debit.reference == 'test send money mock internal'
+    assert debit.amount == int(0.0099 * 1e8)
+    assert debit.reference == 'test send money internal internal'
     assert debit.network == 'internal'
 
     for i in range(0, 60):
@@ -148,27 +150,28 @@ def test_money_cycle():
             time.sleep(1)
     assert c is not None
     assert c.state == 'complete'
-    assert c.amount == int(0.01 * 1e8)
-    assert c.reference == 'test send money mock internal'
+    assert c.amount == int(0.0099 * 1e8)
+    assert c.reference == 'test send money internal internal'
     assert c.network == 'internal'
     assert int(debit.ref_id) == c.id
     assert int(c.ref_id) == debit.id
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'MCK').first()
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'BTC').first()
     assert bal.total == 0
     assert bal.available == 0
 
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'MCK').first()
-    assert bal.total == int(0.01 * 1e8)
-    assert bal.available == int(0.01 * 1e8)
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'BTC').first()
+    assert bal.total == int(0.0099 * 1e8)
+    assert bal.available == int(0.0099 * 1e8)
 
-    # Send Mock from user2
-    addy = mock_address()
-    debit = client2.debit.sendMoney(debit={'amount': int(0.01 * 1e8),
+    # Send Internal from user2
+    addy = internal_address()
+    debit = client2.debit.sendMoney(debit={'amount': int(0.0098 * 1e8),
+                                   'fee': CFG.get('internal', 'FEE'),
                                   'address': addy,
-                                  'currency': 'MCK',
-                                  'network': 'Mock',
+                                  'currency': 'BTC',
+                                  'network': 'Internal',
                                   'state': 'unconfirmed',
-                                  'reference': 'test send money mock',
+                                  'reference': 'test send money internal',
                                   'ref_id': ''}).result()
     time.sleep(0.1)
     for i in range(0, 60):
@@ -180,8 +183,8 @@ def test_money_cycle():
     assert d is not None
 
     assert d.address == addy
-    assert d.amount == int(0.01 * 1e8)
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'MCK')
+    assert d.amount == int(0.0098 * 1e8)
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user2.id).filter(models.Balance.currency == 'BTC')
     assert bal.first().total == 0
     assert bal.first().available == 0
 
@@ -192,9 +195,9 @@ def test_get_credits():
     by_address = None
     by_ref_id = None
     for i in range(30):
-        addy = client.get_model('Address')(currency='MCK', network='Mock')
+        addy = client.get_model('Address')(currency='BTC', network='Internal')
         address = client.address.createAddress(address=addy).result()
-        c = mock_credit(address.address, int(0.01 * 1e8))
+        c = internal_credit(address.address, int(0.01 * 1e8))
         if i == 1:
             by_id = c.id
         elif i == 2:
@@ -242,10 +245,10 @@ def test_get_credits():
 
 def test_get_debits():
     # generate a big credit
-    addy = client.get_model('Address')(currency='MCK', network='Mock')
+    addy = client.get_model('Address')(currency='BTC', network='Internal')
     address = client.address.createAddress(address=addy).result()
-    c = mock_credit(address.address, int(1 * 1e8))
-    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'MCK').first()
+    c = internal_credit(address.address, int(1 * 1e8))
+    bal = ses.query(models.Balance).filter(models.Balance.user_id == user.id).filter(models.Balance.currency == 'BTC').first()
     bal.available += c.amount
     ses.add(bal)
     try:
@@ -259,12 +262,13 @@ def test_get_debits():
     by_id = None
     by_address = None
     for i in range(30):
-        addy = client2.get_model('Address')(currency='MCK', network='Mock')
+        addy = client2.get_model('Address')(currency='BTC', network='Internal')
         address = client2.address.createAddress(address=addy).result()
         debit = client.debit.sendMoney(debit={'amount': int(0.01 * 1e8),
+                                        'fee': CFG.get('internal', 'FEE'),
                                        'address': address.address,
-                                       'currency': 'MCK',
-                                       'network': 'Mock',
+                                       'currency': 'BTC',
+                                       'network': 'Internal',
                                        'state': 'unconfirmed',
                                        'reference': 'test get debits',
                                        'ref_id': ''}).result()
@@ -307,5 +311,12 @@ def test_get_debits():
     debs = client.search.searchDebits(searchcd={'id': by_id}).result()
     assert len(debs) == 1
     assert debs[0].id == by_id
+
+
+def test_get_network():
+    network = client.network.getinfo(network='Internal').result()
+    assert network.isenabled
+    assert network.available == 10000000000000000000
+    assert network.fee == 0.0001 * 1e8
 
 

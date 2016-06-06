@@ -14,6 +14,39 @@
         "version": "0.0.1"
     }, 
     "paths": {
+        "/network/{network}": {
+            "get": {
+                "responses": {
+                    "default": {
+                        "description": "an error", 
+                        "schema": {
+                            "$ref": "#/definitions/errorModel"
+                        }
+                    }, 
+                    "200": {
+                        "description": "the network information", 
+                        "schema": {
+                            "$ref": "#/definitions/NetworkInfo"
+                        }
+                    }
+                }, 
+                "description": "Returned info is: enabled/disabled, available hot wallet balance,<br/>& the transaction fee.", 
+                "parameters": [
+                    {
+                        "required": true, 
+                        "type": "string", 
+                        "description": "The network name i.e. Bitcoin, Dash", 
+                        "in": "path", 
+                        "name": "network"
+                    }
+                ], 
+                "produces": [
+                    "application/json"
+                ], 
+                "summary": "Get information about the transaction network indicated.", 
+                "operationId": "getinfo"
+            }
+        }, 
         "/search/debit": {
             "post": {
                 "responses": {
@@ -380,29 +413,25 @@
             "type": "object", 
             "description": "Search pattern for a Credit or Debit.", 
             "properties": {
-                "network": {
+                "currency": {
                     "type": "string", 
-                    "maxLength": 64
+                    "maxLength": 4
                 }, 
                 "ref_id": {
                     "type": "string", 
                     "maxLength": 256
                 }, 
-                "currency": {
-                    "type": "string", 
-                    "maxLength": 4
-                }, 
-                "address": {
-                    "type": "string", 
-                    "maxLength": 64
-                }, 
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
                 }, 
-                "page": {
-                    "type": "integer", 
-                    "description": "The page number to return. (10 per page)"
+                "network": {
+                    "type": "string", 
+                    "maxLength": 64
+                }, 
+                "address": {
+                    "type": "string", 
+                    "maxLength": 64
                 }
             }
         }, 
@@ -440,6 +469,25 @@
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
+                }
+            }
+        }, 
+        "NetworkInfo": {
+            "title": "NetworkInfo", 
+            "type": "object", 
+            "description": "Information about a Transaction Network. i.e. Bitcoin, Dash", 
+            "properties": {
+                "available": {
+                    "type": "integer", 
+                    "description": "The available wallet balance as an int"
+                }, 
+                "isenabled": {
+                    "type": "boolean", 
+                    "description": "True only if the network is enabled."
+                }, 
+                "fee": {
+                    "type": "integer", 
+                    "description": "The transaction fee as an int"
                 }
             }
         }, 
@@ -531,10 +579,6 @@
                     "type": "string", 
                     "maxLength": 64
                 }, 
-                "time": {
-                    "type": "string", 
-                    "format": "date-time"
-                }, 
                 "id": {
                     "type": "integer", 
                     "description": "primary key"
@@ -612,10 +656,6 @@
                 "address": {
                     "type": "string", 
                     "maxLength": 64
-                }, 
-                "time": {
-                    "type": "string", 
-                    "format": "date-time"
                 }, 
                 "id": {
                     "type": "integer", 
@@ -700,3 +740,4 @@
         "application/jose"
     ]
 }
+
