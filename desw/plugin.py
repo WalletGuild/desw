@@ -1,4 +1,5 @@
-from desw import CFG, ses, models, logger, process_credit
+from desw import CFG, ses, wm, logger, process_credit
+from ledger import Amount
 import importlib
 import json
 import random
@@ -22,8 +23,8 @@ def _gen_txid():
 
 
 def internal_credit(address, amount, currency='BTC'):
-    addyq = ses.query(models.Address)
-    addy = addyq.filter(models.Address.address == address).first()
+    addyq = ses.query(wm.Address)
+    addy = addyq.filter(wm.Address.address == address).first()
     if not addy:
         logger.warning("address not known. returning.")
         return
@@ -32,8 +33,8 @@ def internal_credit(address, amount, currency='BTC'):
 
 
 def internal_confirm_credit(txid):
-    credq = ses.query(models.Credit)
-    credit = credq.filter(models.Credit.ref_id == txid).first()
+    credq = ses.query(wm.Credit)
+    credit = credq.filter(wm.Credit.ref_id == txid).first()
     if not credit:
         logger.warning("credit not known. returning.")
         return
@@ -54,7 +55,7 @@ class InternalPlugin():
     def __init__(self):
         for cur in json.loads(CFG.get('internal', 'CURRENCIES')):
             #TODO set this to maximum transaction sizes for each currency
-            hwb = models.HWBalance(100000000000, 100000000000, cur, 'internal')
+            hwb = wm.HWBalance(Amount("1000 %s" % cur), Amount("1000 %s" % cur), cur, 'internal')
             ses.add(hwb)
             try:
                 ses.commit()
@@ -72,7 +73,7 @@ class InternalPlugin():
         return _gen_txid()
 
     def get_balance(self):
-        hwb = ses.query(models.HWBalance).filter(models.HWBalance.network == self.NETWORK.lower()).order_by(models.HWBalance.time.desc()).first()
+        hwb = ses.query(wm.HWBalance).filter(wm.HWBalance.network == self.NETWORK.lower()).order_by(wm.HWBalance.time.desc()).first()
         return {'total': hwb.total, 'available': hwb.available}
 
 

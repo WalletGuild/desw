@@ -4,35 +4,21 @@ import os
 import sys
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
-from sqlalchemy_login_models.model import UserKey, User as SLM_User
-import model
+
+# rename for ease and to avoid ambiguity
+from sqlalchemy_models.user import UserKey, User as SLM_User
+from sqlalchemy_models import (setup_logging, setup_database,
+                               create_session_engine, wallet as wm,
+                               user as um)
 
 import ConfigParser
 CFG = ConfigParser.ConfigParser()
-CFG.read(os.environ.get('DESW_CONFIG_FILE', 'example_cfg.ini'))
+CFG.read(os.environ.get('DESW_CONFIG_FILE', 'cfg.ini'))
 
-# database stuff
-eng = sa.create_engine(CFG.get('db', 'SA_ENGINE_URI'))
-ses = orm.sessionmaker(bind=eng)()
+ses, eng = create_session_engine(cfg=CFG)
+setup_database(eng, models=[SLM_User, UserKey], modules=[wm])
 
-def setup_database():
-    SLM_User.metadata.create_all(eng)
-    UserKey.metadata.create_all(eng)
-    for m in model.__all__:
-        getattr(model, m).metadata.create_all(eng)
-
-setup_database()
-
-models = model # rename loaded models to avoid ambiguity
-models.User = SLM_User
-models.UserKey = UserKey
-
-# Setup logging
-logfile = CFG.LOGFILE if hasattr(CFG, 'LOGFILE') else 'server.log'
-loglevel = CFG.LOGLEVEL if hasattr(CFG, 'LOGLEVEL') else logging.INFO
-logging.basicConfig(filename=logfile, level=loglevel)
-logger = logging.getLogger(__name__)
-
+logger = setup_logging(cfg=CFG)
 
 def confirm_send(address, amount, ref_id=None):
     """
@@ -44,10 +30,10 @@ def confirm_send(address, amount, ref_id=None):
     :param str address: The address that was sent to
     :param int amount: The amount that was sent, as an INT
     """
-    debitq = ses.query(models.Debit)
-    debitq.filter(models.Debit.address == address)
-    debitq.filter(models.Debit.amount == amount)
-    debit = debitq.filter(models.Debit.state == 'unconfirmed').first()
+    debitq = ses.query(wm.Debit)
+    debitq.filter(wm.Debit.address == address)
+    debitq.filter(wm.Debit.amount == amount)
+    debit = debitq.filter(wm.Debit.state == 'unconfirmed').first()
     if not debit:
         logger.info("debit already confirmed or address unknown. returning.")
         return
@@ -66,19 +52,19 @@ def confirm_send(address, amount, ref_id=None):
 
 def process_credit(amount, address, currency, network, state, reference,
                    ref_id, user_id):
-    credit = models.Credit(amount=amount, address=address,
-                           currency=currency, network=network, state=state,
-                           reference=reference, ref_id=ref_id,
-                           user_id=user_id)
-
+    logger.debug("%s" % amount)
+    credit = wm.Credit(amount=amount, address=address,
+                       currency=currency, network=network, state=state,
+                       reference=reference, ref_id=ref_id,
+                       user_id=user_id)
     ses.add(credit)
-    bal = ses.query(models.Balance)\
-        .filter(models.Balance.user_id == user_id)\
-        .filter(models.Balance.currency == currency)\
-        .order_by(models.Balance.time.desc()).first()
+    bal = ses.query(wm.Balance)\
+        .filter(wm.Balance.user_id == user_id)\
+        .filter(wm.Balance.currency == currency)\
+        .order_by(wm.Balance.time.desc()).first()
     if state == 'complete':
-        bal.available += amount
-    bal.total += amount
+        bal.available = bal.available + amount
+    bal.total = bal.total + amount
     ses.add(bal)
     try:
         ses.commit()
