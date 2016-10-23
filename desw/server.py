@@ -526,7 +526,7 @@ def get_user():
       - alg: []
     operationId: getUserList
     """
-    userdict = jsonify2(current_user.db_user, 'User')
+    userdict = jsonify2(current_user.dbuser, 'User')
     return current_app.bitjws.create_response(userdict)
 
 

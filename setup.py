@@ -20,12 +20,9 @@ setup(
     package_data={'desw': ['static/swagger.json']},
     install_requires=[
         'sqlalchemy>=1.0.9',
-        'secp256k1==0.11',
-        "bitjws==0.6.3.1",
         "flask>=0.10.0",
         "flask-login",
         "flask-cors",
-        "flask-bitjws>=0.1.1.4",
         "alchemyjsonschema"
     ],
     tests_require=['pytest', 'pytest-cov'],
