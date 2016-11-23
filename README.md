@@ -4,46 +4,32 @@ A shared wallet server, for maintaining a centralized ledger of accounts. Accoun
 
 # REST + Bitjws + Swagger
 
-This server provides a REST API for operation as a service. The authentication is done using [bitjws](http://github.com/deginner/bitjws).
+This server provides a REST API for operation as a service. The authentication is done using [bitjws](http://github.com/tappguild/bitjws).
 
 # Installation
 
-### Pre-requisites
+Just run `make install`. This will automatically install all prereqs
+including ledger-cli and sepc256k1.
 
-By default it's expected that [secp256k1](https://github.com/bitcoin/secp256k1) is available, so install it before proceeding; make sure to run `./configure --enable-module-recovery`. If you're using some other library that provides the functionality necessary for this, check the __Using a custom library__ section below.
+Also make will create data directories for storing your logs and
+configuration files. Expected to run on *nux systems, these directories will be as follows.
 
-bitjws can be installed by running `pip install bitjws`.
+| For           | Location               |
+|---------------|------------------------|
+| logs          | /var/log/desw  |
+| configuration | /etc/tapp/desw |
+| pids          | /var/run/              |
 
-##### Building secp256k1
-
-In case you need to install the `secp256k1` C library, the following sequence of commands is recommended. If you already have `secp256k1`, make sure it was compiled from the expected git commit or it might fail to work due to API incompatibilities.
-
-```
-git clone git://github.com/bitcoin/secp256k1.git libsecp256k1
-cd libsecp256k1
-git checkout d7eb1ae96dfe9d497a26b3e7ff8b6f58e61e400a
-./autogen.sh
-./configure --enable-module-recovery --enable-module-ecdh --enable-module-schnorr
-make
-make install
-```
-
-Additionally, you may need to set some environmental variables, pointing to the installation above.
-
-```
-INCLUDE_DIR=$(readlink -f ./libsecp256k1/include)
-LIB_DIR=$(readlink -f ./libsecp256k1/.libs)
-python setup.py -q install
-
-LD_LIBRARY_PATH=$(readlink -f ./libsecp256k1/.libs)
+If and when you wish to change any configuration settings, edit
+the .ini file in the configuration directory.
 
 ### Plugins
 
-This package is practically useless without installing one or more wallet plugins. The only wallet backend that it comes with is a mockup. Currently supported plugins are: [desw-bitcoin](http://github.com/deginner/desw-bitcoin) and [desw-dash](http://github.com/deginner/desw-dash).
+This package is practically useless without installing one or more wallet plugins. The only wallet backend that it comes with is a mockup. Currently supported plugins are: [desw-bitcoin](http://github.com/walletguild/desw-bitcoin) and [desw-dash](http://github.com/walletguild/desw-dash).
 
 # Bitcoin Examples
 
-For the sake of an example, we'll assume you're starting with the desw-bitcoin plugin, and that you're using Deginner's [bravado-bitjws](http://github.com/deginner/bravado-bitjws) Python client.
+For the sake of an example, we'll assume you're starting with the desw-bitcoin plugin, and that you're using [bravado-bitjws](http://github.com/tappguild/bravado-bitjws) Python client.
 
 ##### Register a new user
 
@@ -69,11 +55,11 @@ balances = client.balance.getBalance().result()
 
 ``` Python
 addy = "1Go7y9ZQE3fzkHwWE89n4SbRo1GMEZonLN"
-debit = client.debit.sendMoney(debit={'amount': int(0.01 * 1e8),
+debit = client.debit.sendMoney(debit={'amount': 0.01,
                               'address': addy,
                               'currency': 'BTC',
                               'network': 'Bitcoin',
                               'state': 'unconfirmed', #ignored
-                              'reference': 'test send money BTC internal',
+                              'reference': 'test send money BTC external',
                               'ref_id': ''}).result()
 ```

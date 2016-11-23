@@ -1,13 +1,13 @@
-import bitjws
-import json
 import os
-import pytest
 import time
+from ledger import Amount
+
+import bitjws
 from bravado.swagger_model import load_file
 from bravado_bitjws.client import BitJWSSwaggerClient
-from desw import CFG, ses, eng, wm
-from desw.plugin import internal_credit, internal_address, internal_confirm_credit
-from ledger import Amount
+
+from desw import CFG, ses, wm
+from desw.plugin import internal_credit, internal_address
 
 host = "0.0.0.0"
 url = "http://0.0.0.0:8002/"
@@ -28,6 +28,7 @@ username2 = str(my_address2)[0:8]
 client2 = BitJWSSwaggerClient.from_spec(load_file(specurl), origin_url=url)
 luser2 = client2.get_model('User')(username=username2)
 user2 = client2.user.addUser(user=luser2).result().user
+
 
 def test_address():
     addy = client.get_model('Address')(currency='BTC', network='Internal')
@@ -59,7 +60,7 @@ def test_money_cycle():
     # Receive Internal to user
     addy = client.get_model('Address')(currency='BTC', network='Internal')
     address = client.address.createAddress(address=addy).result()
-    internal_credit(address.address, amount + fee)
+    internal_credit(address.address, amount + fee, session=ses)
 
     for i in range(0, 60):
         c = ses.query(wm.Credit).filter(wm.Credit.address == address.address).first()
@@ -73,7 +74,7 @@ def test_money_cycle():
     assert c.currency == 'BTC'
     assert c.network == 'Internal'
     assert len(c.ref_id) > 0
-
+    # ses.close()
     bal = ses.query(wm.Balance).filter(wm.Balance.user_id == user.id).filter(wm.Balance.currency == 'BTC').first()
     assert bal.total > Amount("0 BTC")
     assert bal.available == Amount("0 BTC")
@@ -98,7 +99,7 @@ def test_money_cycle():
                                   'state': 'unconfirmed',
                                   'reference': 'test send money internal internal',
                                   'ref_id': ''}).result()
-    assert debit.state == 'complete'
+    assert debit.transaction_state == 'complete'
     assert debit.amount == 0.01
     assert debit.reference == 'test send money internal internal'
     assert debit.network == 'internal'
@@ -110,7 +111,7 @@ def test_money_cycle():
         else:
             time.sleep(1)
     assert c is not None
-    assert c.state == 'complete'
+    assert c.transaction_state == 'complete'
     assert c.amount == Amount("0.01 BTC")
     assert c.reference == 'test send money internal internal'
     assert c.network == 'internal'
@@ -136,7 +137,7 @@ def test_money_cycle():
                                   'state': 'unconfirmed',
                                   'reference': 'test send money internal internal',
                                   'ref_id': ''}).result()
-    assert debit.state == 'complete'
+    assert debit.transaction_state == 'complete'
     assert debit.amount == 0.0099
     assert debit.reference == 'test send money internal internal'
     assert debit.network == 'internal'
@@ -148,7 +149,7 @@ def test_money_cycle():
         else:
             time.sleep(1)
     assert c is not None
-    assert c.state == 'complete'
+    assert c.transaction_state == 'complete'
     assert c.amount == Amount("0.0099 BTC")
     assert c.reference == 'test send money internal internal'
     assert c.network == 'internal'

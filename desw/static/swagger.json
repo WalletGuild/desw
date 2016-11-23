@@ -446,7 +446,7 @@
             "description": "A user's balance in a single currency. Only the latest record is valid.", 
             "properties": {
                 "available": {
-                    "type": "integer"
+                    "type": "number"
                 }, 
                 "reference": {
                     "type": "string", 
@@ -464,7 +464,7 @@
                     "format": "date-time"
                 }, 
                 "total": {
-                    "type": "integer"
+                    "type": "number"
                 }, 
                 "id": {
                     "type": "integer", 
@@ -478,7 +478,7 @@
             "description": "Information about a Transaction Network. i.e. Bitcoin, Dash", 
             "properties": {
                 "available": {
-                    "type": "integer", 
+                    "type": "number", 
                     "description": "The available wallet balance as an int"
                 }, 
                 "isenabled": {
@@ -486,7 +486,7 @@
                     "description": "True only if the network is enabled."
                 }, 
                 "fee": {
-                    "type": "integer", 
+                    "type": "number", 
                     "description": "The transaction fee as an int"
                 }
             }
@@ -508,7 +508,7 @@
                     "type": "string", 
                     "maxLength": 4
                 }, 
-                "state": {
+                "address_state": {
                     "enum": [
                         "pending", 
                         "active", 
@@ -538,7 +538,7 @@
                 "address", 
                 "currency", 
                 "network", 
-                "state", 
+                "transaction_state",
                 "ref_id"
             ], 
             "type": "object", 
@@ -553,7 +553,7 @@
                     "maxLength": 256
                 }, 
                 "amount": {
-                    "type": "integer"
+                    "type": "number"
                 }, 
                 "ref_id": {
                     "type": "string", 
@@ -563,7 +563,7 @@
                     "type": "string", 
                     "maxLength": 4
                 }, 
-                "state": {
+                "transaction_state": {
                     "enum": [
                         "unconfirmed", 
                         "complete", 
@@ -631,7 +631,7 @@
                     "maxLength": 256
                 }, 
                 "amount": {
-                    "type": "integer"
+                    "type": "number"
                 }, 
                 "ref_id": {
                     "type": "string", 
@@ -641,7 +641,7 @@
                     "type": "string", 
                     "maxLength": 4
                 }, 
-                "state": {
+                "transaction_state": {
                     "enum": [
                         "unconfirmed", 
                         "complete", 

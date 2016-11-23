@@ -1,91 +1,126 @@
-import importlib
-import logging
-import os
-import sys
-import sqlalchemy as sa
-import sqlalchemy.orm as orm
-from sqlalchemy_login_models.model import UserKey, User as SLM_User
-import model
+import datetime
+import json
+from ledger import Amount
 
-import ConfigParser
-CFG = ConfigParser.ConfigParser()
-CFG.read(os.environ.get('DESW_CONFIG_FILE', 'example_cfg.ini'))
+from sqlalchemy_models import (setup_database,
+                               create_session_engine, wallet as wm,
+                               user as um)
+from tapp_config import get_config, setup_logging
 
-# database stuff
-eng = sa.create_engine(CFG.get('db', 'SA_ENGINE_URI'))
-ses = orm.sessionmaker(bind=eng)()
+CFG = get_config('desw')
+ses, eng = create_session_engine(cfg=CFG)
+setup_database(eng, modules=[wm, um])
 
-def setup_database():
-    SLM_User.metadata.create_all(eng)
-    UserKey.metadata.create_all(eng)
-    for m in model.__all__:
-        getattr(model, m).metadata.create_all(eng)
-
-setup_database()
-
-models = model # rename loaded models to avoid ambiguity
-models.User = SLM_User
-models.UserKey = UserKey
-
-# Setup logging
-logfile = CFG.LOGFILE if hasattr(CFG, 'LOGFILE') else 'server.log'
-loglevel = CFG.LOGLEVEL if hasattr(CFG, 'LOGLEVEL') else logging.INFO
-logging.basicConfig(filename=logfile, level=loglevel)
-logger = logging.getLogger(__name__)
+logger = setup_logging('desw', prefix='desw', cfg=CFG)
 
 
-def confirm_send(address, amount, ref_id=None):
+def confirm_send(address, amount, ref_id=None, session=ses):
     """
     Confirm that a send has completed. Does not actually check confirmations,
     but instead assumes that if this is called, the transaction has been
     completed. This is because we assume our own sends are safe.
 
+    :param session:
     :param str ref_id: The updated ref_id for the transaction in question
     :param str address: The address that was sent to
-    :param int amount: The amount that was sent, as an INT
+    :param Amount amount: The amount that was sent
     """
-    debitq = ses.query(models.Debit)
-    debitq.filter(models.Debit.address == address)
-    debitq.filter(models.Debit.amount == amount)
-    debit = debitq.filter(models.Debit.state == 'unconfirmed').first()
+    debitq = session.query(wm.Debit)
+    debitq = debitq.filter(wm.Debit.address == address)
+    debitq = debitq.filter(wm.Debit.amount == amount)
+    debit = debitq.filter(wm.Debit.transaction_state == 'unconfirmed').first()
     if not debit:
-        logger.info("debit already confirmed or address unknown. returning.")
-        return
-    debit.state = 'complete'
+        raise ValueError("Debit already confirmed or address unknown.")
+    debit.transaction_state = 'complete'
     if ref_id is not None:
         debit.ref_id = ref_id
-    ses.add(debit)
-    try:
-        ses.commit()
-    except Exception as e:
-        logger.exception(e)
-        ses.rollback()
-        ses.flush()
+    session.add(debit)
+    session.commit()
     return debit
 
 
-def process_credit(amount, address, currency, network, state, reference,
-                   ref_id, user_id):
-    credit = models.Credit(amount=amount, address=address,
-                           currency=currency, network=network, state=state,
-                           reference=reference, ref_id=ref_id,
-                           user_id=user_id)
-
-    ses.add(credit)
-    bal = ses.query(models.Balance)\
-        .filter(models.Balance.user_id == user_id)\
-        .filter(models.Balance.currency == currency)\
-        .order_by(models.Balance.time.desc()).first()
-    if state == 'complete':
-        bal.available += amount
-    bal.total += amount
-    ses.add(bal)
-    try:
-        ses.commit()
-    except Exception as e:
-        print e
-        logger.exception(e)
-        ses.rollback()
-        ses.flush()
+def process_credit(amount, address, currency, network, transaction_state, reference,
+                   ref_id, user_id, session=ses):
+    logger.debug("%s" % amount)
+    credit = wm.Credit(amount=amount, address=address,
+                       currency=currency, network=network, transaction_state=transaction_state,
+                       reference=reference, ref_id=ref_id,
+                       user_id=user_id, time=datetime.datetime.utcnow())
+    session.add(credit)
+    avail = amount if transaction_state == 'complete' else Amount("0 %s" % currency)
+    adjust_user_balance(user_id, currency, avail, amount, ref_id, ses)
+    session.commit()
     return credit
 
+
+def adjust_user_balance(user_id, currency, available=None, total=None, reference=None, session=ses):
+    if available is None and total is None:
+        return
+    bal = session.query(wm.Balance)\
+        .filter(wm.Balance.user_id == user_id)\
+        .filter(wm.Balance.currency == currency).first()
+    if available is None:
+        available = Amount("0 %s" % currency)
+    if total is None:
+        total = Amount("0 %s" % currency)
+
+    bal.available = bal.available + available
+    bal.total = bal.total + total
+    assert bal.available <= bal.total
+    bal.time = datetime.datetime.utcnow()
+    if reference is not None:
+        bal.reference = str(reference)
+    session.add(bal)
+
+
+def adjust_hw_balance(currency, network, available=None, total=None, session=ses):
+    if available is None and total is None:
+        return
+    hwb = session.query(wm.HWBalance).filter(wm.HWBalance.network == network).order_by(wm.HWBalance.time.desc()).first()
+    if available is None:
+        available = Amount("0 %s" % currency)
+    if total is None:
+        total = Amount("0 %s" % currency)
+    available += hwb.available
+    total += hwb.total
+    new_hwb = wm.HWBalance(available, total, currency, network)
+    session.add(new_hwb)
+
+
+def guess_network_by_currency(currency):
+    if currency == "BTC":
+        return "Bitcoin"
+    elif currency == "DASH":
+        return "Dash"
+    elif currency == "ETH":
+        return "Ethereum"
+    elif currency == "LTC":
+        return "Litecoin"
+
+
+def create_user_and_key(username, address, last_nonce, session=ses):
+    user = um.User(username=username)
+    session.add(user)
+    try:
+        session.commit()
+    except Exception as ie:
+        logger.exception(ie)
+        session.rollback()
+        session.flush()
+        raise IOError("username or key taken")
+    userkey = um.UserKey(key=address, keytype='public', user_id=user.id,
+                         last_nonce=last_nonce)
+    session.add(userkey)
+    for cur in json.loads(CFG.get('internal', 'CURRENCIES')):
+        session.add(wm.Balance(total=Amount("0 %s" % cur), available=Amount("0 %s" % cur), currency=cur, reference='open account', user_id=user.id))
+    try:
+        session.commit()
+    except Exception as ie:
+        logger.exception("hmmm unable to create user")
+        logger.exception(ie)
+        session.rollback()
+        session.flush()
+        session.delete(user)
+        session.commit()
+        raise IOError("username or key taken")
+    return user, userkey

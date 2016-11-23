@@ -1,34 +1,25 @@
-import alchemyjsonschema as ajs
-import bitjws
 import copy
+import datetime
 import json
-import logging
 import os
-import sys
-import sqlalchemy as sa
-import sqlalchemy.orm as orm
+from ledger import Amount
+
 from alchemyjsonschema.dictify import jsonify
-from flask import Flask, request, current_app, make_response
+from flask import Flask, request, current_app
 from flask.ext.cors import CORS
 from flask.ext.login import login_required, current_user
-from flask_bitjws import FlaskBitjws, load_jws_from_request, FlaskUser
-from jsonschema import validate, ValidationError
-from sqlalchemy_login_models.model import UserKey, User as SLM_User
+from flask_bitjws import FlaskBitjws, load_jws_from_request
+from sqlalchemy_models import jsonify2
+
 import plugin
-from desw import CFG, models, ses, eng
+from desw import CFG, wm, um, ses, create_user_and_key
 
 ps = plugin.load_plugins()
 
 # get the swagger spec for this server
 iml = os.path.dirname(os.path.realpath(__file__))
 SWAGGER_SPEC = json.loads(open(iml + '/static/swagger.json').read())
-# invert definitions
-def jsonify2(obj, name):
-    #TODO replace this with a cached definitions patch
-    #this is inefficient to do each time...
-    spec = copy.copy(SWAGGER_SPEC['definitions'][name])
-    spec['definitions'] = SWAGGER_SPEC['definitions']
-    return jsonify(obj, spec)
+
 
 __all__ = ['app', ]
 
@@ -41,8 +32,8 @@ def get_last_nonce(app, key, nonce):
     :param str key: the public key the nonce belongs to
     :param int nonce: the last nonce used by this key
     """
-    uk = ses.query(UserKey).filter(UserKey.key==key)\
-            .filter(UserKey.last_nonce<nonce * 1000).first()
+    uk = ses.query(um.UserKey).filter(um.UserKey.key==key)\
+            .filter(um.UserKey.last_nonce<nonce * 1000).first()
     if not uk:
         return None
     lastnonce = copy.copy(uk.last_nonce)
@@ -63,7 +54,7 @@ def get_user_by_key(app, key):
 
     :param str key: the public key the user belongs to
     """
-    user = ses.query(SLM_User).join(UserKey).filter(UserKey.key==key).first()
+    user = ses.query(um.User).join(um.UserKey).filter(um.UserKey.key==key).first()
     return user
 
 # Setup flask app and FlaskBitjws
@@ -100,11 +91,13 @@ def get_balance():
       - alg: []
     operationId: getBalance
     """
-    balsq = ses.query(models.Balance).filter(models.Balance.user_id == current_user.id)
+    balsq = ses.query(wm.Balance).filter(wm.Balance.user_id == current_user.id)
     if not balsq:
         return None
-    bals = [jsonify2(b, 'Balance') for b in balsq]
+    bals = [json.loads(jsonify2(b, 'Balance')) for b in balsq]
+    print "returning bals %s" % bals
     response = current_app.bitjws.create_response(bals)
+    ses.close()
     return response
 
 
@@ -149,7 +142,7 @@ def create_address():
             return 'wallet temporarily unavailable', 500
     else:
         return 'Invalid network', 400
-    address = models.Address(addy, currency, network, state, current_user.id)
+    address = wm.Address(addy, currency, network, state, current_user.id)
     ses.add(address)
     try:
         ses.commit()
@@ -157,8 +150,9 @@ def create_address():
         ses.rollback()
         ses.flush()
         return 'Could not save address', 500
-    newaddy = jsonify2(address, 'Address')
+    newaddy = json.loads(jsonify2(address, 'Address'))
     current_app.logger.info("created new address %s" % newaddy)
+    ses.close()
     return current_app.bitjws.create_response(newaddy)
 
 
@@ -195,17 +189,19 @@ def get_address():
     address = request.jws_payload['data'].get('address')
     currency = request.jws_payload['data'].get('currency')
     network = request.jws_payload['data'].get('network')
-    addysq = ses.query(models.Address).filter(models.Address.user_id == current_user.id)
+    addysq = ses.query(wm.Address).filter(wm.Address.user_id == current_user.id)
     if address:
-        addysq = addysq.filter(models.Address.address == address)
+        addysq = addysq.filter(wm.Address.address == address)
     elif currency:
-        addysq = addysq.filter(models.Address.currency == currency)
+        addysq = addysq.filter(wm.Address.currency == currency)
     elif network:
-        addysq = addysq.filter(models.Address.network == network)
-    if not addysq:
-        return None
-    addys = [jsonify2(a, 'Address') for a in addysq]
+        addysq = addysq.filter(wm.Address.network == network)
+    if addysq.count() == 0:
+        return "Invalid Request", 400
+
+    addys = [json.loads(jsonify2(a, 'Address')) for a in addysq]
     response = current_app.bitjws.create_response(addys)
+    ses.close()
     return response
 
 
@@ -247,28 +243,29 @@ def search_debit():
     ref_id = request.jws_payload['data'].get('ref_id')
     page = request.jws_payload['data'].get('page') or 0
 
-    debsq = ses.query(models.Debit).filter(models.Debit.user_id == current_user.id)
+    debsq = ses.query(wm.Debit).filter(wm.Debit.user_id == current_user.id)
     if not debsq:
         return None
 
     if sid:
-        debsq = debsq.filter(models.Debit.id == sid)
+        debsq = debsq.filter(wm.Debit.id == sid)
     if address:
-        debsq = debsq.filter(models.Debit.address == address)
+        debsq = debsq.filter(wm.Debit.address == address)
     if currency:
-        debsq = debsq.filter(models.Debit.currency == currency)
+        debsq = debsq.filter(wm.Debit.currency == currency)
     if network:
-        debsq = debsq.filter(models.Debit.network == network)
+        debsq = debsq.filter(wm.Debit.network == network)
     #if reference:
-    #    debsq = debsq.filter(models.Debit.reference == reference)
+    #    debsq = debsq.filter(wm.Debit.reference == reference)
     if ref_id:
-        debsq = debsq.filter(models.Debit.ref_id == ref_id)
-    debsq = debsq.order_by(models.Debit.time.desc()).limit(10)
+        debsq = debsq.filter(wm.Debit.ref_id == ref_id)
+    debsq = debsq.order_by(wm.Debit.time.desc()).limit(10)
     if page and isinstance(page, int):
         debsq = debsq.offset(page * 10)
 
-    debits = [jsonify2(d, 'Debit') for d in debsq]
+    debits = [json.loads(jsonify2(d, 'Debit')) for d in debsq]
     response = current_app.bitjws.create_response(debits)
+    ses.close()
     return response
 
 
@@ -310,27 +307,28 @@ def search_credit():
     ref_id = request.jws_payload['data'].get('ref_id')
     page = request.jws_payload['data'].get('page') or 0
 
-    credsq = ses.query(models.Credit).filter(models.Credit.user_id == current_user.id)
+    credsq = ses.query(wm.Credit).filter(wm.Credit.user_id == current_user.id)
     if not credsq:
         return None
     if sid:
-        credsq = credsq.filter(models.Credit.id == sid)
+        credsq = credsq.filter(wm.Credit.id == sid)
     if address:
-        credsq = credsq.filter(models.Credit.address == address)
+        credsq = credsq.filter(wm.Credit.address == address)
     if currency:
-        credsq = credsq.filter(models.Credit.currency == currency)
+        credsq = credsq.filter(wm.Credit.currency == currency)
     if network:
-        credsq = credsq.filter(models.Credit.network == network)
+        credsq = credsq.filter(wm.Credit.network == network)
     #if reference:
-    #    credsq = credsq.filter(models.Credit.reference == reference)
+    #    credsq = credsq.filter(wm.Credit.reference == reference)
     if ref_id:
-        credsq = credsq.filter(models.Credit.ref_id == ref_id)
-    credsq = credsq.order_by(models.Credit.time.desc()).limit(10)
+        credsq = credsq.filter(wm.Credit.ref_id == ref_id)
+    credsq = credsq.order_by(wm.Credit.time.desc()).limit(10)
     if page and isinstance(page, int):
         credsq = credsq.offset(page * 10)
 
-    credits = [jsonify2(c, 'Credit') for c in credsq]
+    credits = [json.loads(jsonify2(c, 'Credit')) for c in credsq]
     response = current_app.bitjws.create_response(credits)
+    ses.close()
     return response
 
 
@@ -363,11 +361,12 @@ def network_info(network):
     """
     lnet = network.lower()
     isenabled = lnet in ps
-    fee = int(CFG.get(lnet, 'FEE'))
-    roughAvail = str(int(ps[lnet].get_balance()['available']))
-    available = int(float("1" + "0" * (len(roughAvail) - 1)) * 1e8)
+    fee = float(CFG.get(lnet, 'FEE'))
+    roughAvail = str(int(ps[lnet].get_balance()['available'].to_double()))
+    available = float(10 ** (len(roughAvail) - 1))
     response = json.dumps({'isenabled': isenabled, 'fee': fee,
                            'available': available})
+    ses.close()
     return response
 
 
@@ -399,88 +398,30 @@ def create_debit():
       - alg: []
     operationId: sendMoney
     """
-    amount = request.jws_payload['data'].get('amount')
-    address = request.jws_payload['data'].get('address')
     currency = request.jws_payload['data'].get('currency')
+    amount = Amount("%s %s" % (request.jws_payload['data'].get('amount'),
+                               currency))
+    address = request.jws_payload['data'].get('address')
     network = request.jws_payload['data'].get('network')
     reference = request.jws_payload['data'].get('reference')
     state = 'unconfirmed'
-    if network.lower() not in ps:
-        return 'Invalid network', 400
-
-    dbaddy = ses.query(models.Address)\
-        .filter(models.Address.address == address)\
-        .filter(models.Address.currency == currency).first()
-    if dbaddy is not None and dbaddy.address == address:
-        network = 'internal'
-    elif network == 'internal' and dbaddy is None:
-        return "internal address not found", 400
-    fee = int(CFG.get(network.lower(), 'FEE'))
-
-    txid = 'TBD'
-    debit = models.Debit(amount, fee, address,
-                         currency, network, state, reference, txid, 
-                         current_user.id)
-    ses.add(debit)
-
-    bal = ses.query(models.Balance)\
-        .filter(models.Balance.user_id == current_user.id)\
-        .filter(models.Balance.currency == currency)\
-        .order_by(models.Balance.time.desc()).first()
-    if not bal or bal.available < amount + fee:
-        return "not enough funds", 400
-    else:
-        bal.total -= amount + fee
-        bal.available -= amount + fee
-        ses.add(bal)
-        current_app.logger.info("updating balance %s" % jsonify2(bal, 'Balance'))
     try:
-        ses.commit()
-    except Exception as ie:
-        current_app.logger.exception(ie)
+        debit = plugin.create_debit(current_user, amount, currency, address, network, reference, state='unconfirmed',
+                                    plugins=ps, session=ses)
+        plugin.process_debit(debit, plugins=ps, session=ses)
+    except (IOError, ValueError) as e:
+        current_app.logger.exception(e)
         ses.rollback()
         ses.flush()
-        return "unable to send funds", 500
-
-    if network == 'internal':
-        bal2 = ses.query(models.Balance)\
-            .filter(models.Balance.user_id == dbaddy.user_id)\
-            .filter(models.Balance.currency == currency)\
-            .order_by(models.Balance.time.desc()).first()
-        bal2.available += amount
-        bal2.total += amount
-        credit = models.Credit(amount, address, currency, network, 'complete', reference, debit.id, dbaddy.user_id)
-        ses.add(bal2)
-        ses.add(credit)
-        current_app.logger.info("updating balance %s" % jsonify2(bal2, 'Balance'))
-        current_app.logger.info("created new credit %s" % jsonify2(credit, 'Credit'))
-        try:
-            ses.commit()
-            debit.ref_id = str(credit.id)
-        except Exception as ie:
-            ses.rollback()
-            ses.flush()
-            return "unable to send funds", 500
-    else:
-        try:
-            debit.ref_id = ps[network.lower()].send_to_address(address, float(amount) / 1e8)
-        except Exception as e:
-            print type(e)
-            print e
-            current_app.logger.error(e)
-            return 'wallet temporarily unavailable', 500
-
-    debit.state = 'complete'
-    try:
-        ses.commit()
-    except Exception as ie:
-        current_app.logger.exception(ie)
+        return "Unable to send money", 400
+    except Exception as e:
+        current_app.logger.exception(e)
         ses.rollback()
         ses.flush()
-        return "Sent but unconfirmed... check again soon", 200
-
-    result = jsonify2(debit, 'Debit')
+        return "Unable to send money", 500
+    result = json.loads(jsonify2(debit, 'Debit'))
     current_app.logger.info("created new debit %s" % result)
+    ses.close()
     return current_app.bitjws.create_response(result)
 
 
@@ -508,7 +449,7 @@ def get_user():
       - alg: []
     operationId: getUserList
     """
-    userdict = jsonify2(current_user.db_user, 'User')
+    userdict = json.loads(jsonify2(current_user.dbuser, 'User'))
     return current_app.bitjws.create_response(userdict)
 
 
@@ -546,32 +487,16 @@ def add_user():
         return "Invalid Payload", 401
     username = request.jws_payload['data'].get('username')
     address = request.jws_header['kid']
-    user = SLM_User(username=username)
-    ses.add(user)
+    last_nonce = request.jws_payload['iat']*1000
     try:
-        ses.commit()
-    except Exception as ie:
-        current_app.logger.exception(ie)
+        user, userkey = create_user_and_key(username=username, address=address, last_nonce=last_nonce, session=ses)
+    except IOError:
         ses.rollback()
         ses.flush()
-        return 'username taken', 400
-    userkey = UserKey(key=address, keytype='public', user_id=user.id,
-                      last_nonce=request.jws_payload['iat']*1000)
-    ses.add(userkey)
-    for cur in json.loads(CFG.get('internal', 'CURRENCIES')):
-        ses.add(models.Balance(total=0, available=0, currency=cur, reference='open account', user_id=user.id))
-    try:
-        ses.commit()
-    except Exception as ie:
-        current_app.logger.exception(ie)
-        ses.rollback()
-        ses.flush()
-        #ses.delete(user)
-        #ses.commit()
-        return 'username taken', 400
-    jresult = jsonify2(userkey, 'UserKey')
+        return 'username or key taken', 400
+    jresult = json.loads(jsonify2(userkey, 'UserKey'))
     current_app.logger.info("registered user %s with key %s" % (user.id, userkey.key))
-
+    ses.close()
     return current_app.bitjws.create_response(jresult)
 
 
