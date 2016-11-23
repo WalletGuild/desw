@@ -3,12 +3,9 @@ bitjws==0.6.3.1
 
 # database
 sqlalchemy>=1.0.9
-#alchemyjsonschema
-git+https://github.com/isysd/alchemyjsonschema
+alchemyjsonschema
 
-# pending Pypi release
-#sqlalchemy-login-models
-git+https://github.com/deginner/sqlalchemy-login-models
+sqlalchemy-models>=0.0.6
 
 # web server
 flask
@@ -16,14 +13,6 @@ flask-login
 flask-bitjws
 flask-cors
 
-# client (for testing... move if create setup.py)
-requests
-bravado-bitjws
+flask-swagger
 
-# pending pr #16 publishing to pypi
-#flask-swagger
-git+https://github.com/deginner/flask-swagger
-
-# plugins
-# pending pr #61
-git+https://github.com/jgarzik/python-bitcoinrpc.git
+python-bitcoinrpc

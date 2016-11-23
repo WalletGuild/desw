@@ -508,7 +508,7 @@
                     "type": "string", 
                     "maxLength": 4
                 }, 
-                "state": {
+                "address_state": {
                     "enum": [
                         "pending", 
                         "active", 
@@ -538,7 +538,7 @@
                 "address", 
                 "currency", 
                 "network", 
-                "state", 
+                "transaction_state",
                 "ref_id"
             ], 
             "type": "object", 
@@ -563,7 +563,7 @@
                     "type": "string", 
                     "maxLength": 4
                 }, 
-                "state": {
+                "transaction_state": {
                     "enum": [
                         "unconfirmed", 
                         "complete", 
@@ -641,7 +641,7 @@
                     "type": "string", 
                     "maxLength": 4
                 }, 
-                "state": {
+                "transaction_state": {
                     "enum": [
                         "unconfirmed", 
                         "complete", 
